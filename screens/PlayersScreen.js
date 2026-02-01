@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,34 +6,52 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { searchAndFilterPlayers } from '../services/playerService';
 
 export default function PlayersScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPosition, setSelectedPosition] = useState('All');
+  const [players, setPlayers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const positions = ['All', 'Goalkeeper', 'Field Player'];
 
-  // Mock player data - replace with real data later
-  const players = [
-    {
-      id: 1,
-      name: 'Player Name',
-      position: 'Goalkeeper',
-      team: 'Team A',
-      price: 5.0,
-      points: 0,
-    },
-    {
-      id: 2,
-      name: 'Player Name',
-      position: 'Field Player',
-      team: 'Team B',
-      price: 8.5,
-      points: 0,
-    },
-  ];
+  // Fetch players on mount and when filters change
+  useEffect(() => {
+    loadPlayers();
+  }, [selectedPosition]);
+
+  // Debounced search effect
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      loadPlayers();
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  const loadPlayers = async () => {
+    setLoading(true);
+    setError(null);
+
+    const { data, error: fetchError } = await searchAndFilterPlayers(
+      searchQuery,
+      selectedPosition
+    );
+
+    if (fetchError) {
+      setError('Failed to load players. Please check your connection.');
+      setPlayers([]);
+    } else {
+      setPlayers(data || []);
+    }
+
+    setLoading(false);
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -83,40 +101,62 @@ export default function PlayersScreen() {
 
       {/* Players List */}
       <View style={styles.playersList}>
-        {players.length === 0 ? (
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.oceanMedium} />
+            <Text style={styles.loadingText}>Loading players...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>⚠️ {error}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={loadPlayers}
+              activeOpacity={0.7}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : players.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No players found</Text>
             <Text style={styles.emptySubtext}>
-              Start by adding player data to your app
+              {searchQuery || selectedPosition !== 'All'
+                ? 'Try adjusting your search or filters'
+                : 'Start by adding player data to your database'}
             </Text>
           </View>
         ) : (
-          players.map((player) => (
-            <TouchableOpacity 
-              key={player.id} 
-              style={styles.playerCard}
-              activeOpacity={0.8}>
-              <View style={styles.playerInfo}>
-                <View style={styles.playerHeader}>
-                  <Text style={styles.playerEmoji}>
-                    {player.position === 'Goalkeeper' ? '🥅' : '🏊'}
+          players.map((player) => {
+            // Map DB position to UI labels
+            const displayPosition =
+              player.position === 'GK' ? 'Goalkeeper' : 'Field Player';
+            return (
+              <TouchableOpacity
+                key={player.id}
+                style={styles.playerCard}
+                activeOpacity={0.8}>
+                <View style={styles.playerInfo}>
+                  <View style={styles.playerHeader}>
+                    <Text style={styles.playerEmoji}>
+                      {player.position === 'GK' ? '🥅' : '🏊'}
+                    </Text>
+                    <Text style={styles.playerName}>{player.name}</Text>
+                  </View>
+                  <Text style={styles.playerDetails}>
+                    {displayPosition} • {player.team}
                   </Text>
-                  <Text style={styles.playerName}>{player.name}</Text>
                 </View>
-                <Text style={styles.playerDetails}>
-                  {player.position} • {player.team}
-                </Text>
-              </View>
-              <View style={styles.playerStats}>
-                <View style={styles.priceBadge}>
-                  <Text style={styles.playerPrice}>${player.price}M</Text>
+                <View style={styles.playerStats}>
+                  <View style={styles.priceBadge}>
+                    <Text style={styles.playerPrice}>${player.price.toFixed(1)}M</Text>
+                  </View>
+                  <View style={styles.pointsBadge}>
+                    <Text style={styles.playerPoints}>{player.points} pts</Text>
+                  </View>
                 </View>
-                <View style={styles.pointsBadge}>
-                  <Text style={styles.playerPoints}>{player.points} pts</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))
+              </TouchableOpacity>
+            );
+          })
         )}
       </View>
     </ScrollView>
@@ -286,5 +326,36 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
   },
+  loadingContainer: {
+    padding: spacing.xxl,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.textMuted,
+    marginTop: spacing.md,
+    fontWeight: '600',
+  },
+  errorContainer: {
+    padding: spacing.xxl,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    color: colors.textMuted,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: colors.oceanMedium,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.medium,
+    ...shadows.small,
+  },
+  retryButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '700',
+  },
 });
-

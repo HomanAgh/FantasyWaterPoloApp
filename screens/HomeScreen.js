@@ -1,14 +1,34 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { fetchPlayers } from '../services/playerService';
 
 export default function HomeScreen({ navigation }) {
+  const [playerCount, setPlayerCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadPlayerStats();
+  }, []);
+
+  const loadPlayerStats = async () => {
+    setLoading(true);
+    const { data, error } = await fetchPlayers();
+    
+    if (!error && data) {
+      setPlayerCount(data.length);
+    }
+    
+    setLoading(false);
+  };
+
   return (
     <ScrollView style={styles.container}>
       {/* Ocean-themed header with gradient effect */}
@@ -40,7 +60,18 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.cardTitle}>My Team</Text>
           <Text style={styles.teamIcon}>🏊</Text>
         </View>
-        <Text style={styles.cardSubtext}>0 players selected</Text>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color={colors.oceanMedium} />
+          </View>
+        ) : (
+          <>
+            <Text style={styles.cardSubtext}>0 players selected</Text>
+            <Text style={styles.cardInfo}>
+              {playerCount} players available in database
+            </Text>
+          </>
+        )}
         <TouchableOpacity
           style={styles.button}
           onPress={() => navigation.navigate('MyTeam')}
@@ -260,6 +291,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textMuted,
     textAlign: 'center',
+  },
+  loadingContainer: {
+    padding: spacing.md,
+    alignItems: 'center',
+  },
+  cardInfo: {
+    fontSize: 14,
+    color: colors.oceanMedium,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    fontWeight: '600',
   },
 });
 
