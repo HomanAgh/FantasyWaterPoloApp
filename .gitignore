@@ -76,3 +76,4 @@ yarn-error.log
 
 # Supabase
 config/supabaseConfig.js
+config/supabaseConfig.example.js
