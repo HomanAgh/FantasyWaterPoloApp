@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { searchAndFilterPlayers } from '../services/playerService';
+import { useTeam } from '../context/TeamContext';
 
 export default function PlayersScreen() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -17,8 +18,18 @@ export default function PlayersScreen() {
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const positions = ['All', 'Goalkeeper', 'Field Player'];
+
+  // Get team state from context
+  const { 
+    selectedPlayers, 
+    addPlayer, 
+    removePlayer, 
+    remainingBudget,
+    canAddPlayer 
+  } = useTeam();
 
   // Fetch players on mount and when filters change
   useEffect(() => {
@@ -53,6 +64,22 @@ export default function PlayersScreen() {
     setLoading(false);
   };
 
+  const handleAddPlayer = async (player) => {
+    setErrorMessage('');
+    const result = await addPlayer(player);
+    
+    if (!result.success) {
+      setErrorMessage(result.error || 'Failed to add player');
+      // Clear error after 5 seconds
+      setTimeout(() => setErrorMessage(''), 5000);
+    }
+  };
+
+  const handleRemovePlayer = async (playerId) => {
+    setErrorMessage('');
+    await removePlayer(playerId);
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -61,6 +88,26 @@ export default function PlayersScreen() {
           <Text style={styles.title}>Players</Text>
         </View>
       </View>
+
+      {/* Team Info Banner */}
+      <View style={styles.teamInfoBanner}>
+        <View style={styles.teamInfoItem}>
+          <Text style={styles.teamInfoLabel}>Team</Text>
+          <Text style={styles.teamInfoValue}>{selectedPlayers.length}/12</Text>
+        </View>
+        <View style={styles.teamInfoDivider} />
+        <View style={styles.teamInfoItem}>
+          <Text style={styles.teamInfoLabel}>Budget</Text>
+          <Text style={styles.budgetValue}>${remainingBudget.toFixed(1)}M</Text>
+        </View>
+      </View>
+
+      {/* Error Message */}
+      {errorMessage ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>⚠️ {errorMessage}</Text>
+        </View>
+      ) : null}
 
       {/* Search and Filter */}
       <View style={styles.filterContainer}>
@@ -130,11 +177,13 @@ export default function PlayersScreen() {
             // Map DB position to UI labels
             const displayPosition =
               player.position === 'GK' ? 'Goalkeeper' : 'Field Player';
+            const isInTeam = selectedPlayers.some(p => p.id === player.id);
+            const canAdd = canAddPlayer(player);
+            
             return (
-              <TouchableOpacity
+              <View
                 key={player.id}
-                style={styles.playerCard}
-                activeOpacity={0.8}>
+                style={styles.playerCard}>
                 <View style={styles.playerInfo}>
                   <View style={styles.playerHeader}>
                     <Text style={styles.playerEmoji}>
@@ -154,7 +203,29 @@ export default function PlayersScreen() {
                     <Text style={styles.playerPoints}>{player.points} pts</Text>
                   </View>
                 </View>
-              </TouchableOpacity>
+                
+                {/* Add/Remove Button */}
+                <View style={styles.actionButtonContainer}>
+                  {isInTeam ? (
+                    <TouchableOpacity 
+                      style={styles.removeButton}
+                      onPress={() => handleRemovePlayer(player.id)}
+                      activeOpacity={0.7}>
+                      <Text style={styles.removeButtonText}>✓ In Team</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity 
+                      style={[styles.addButton, !canAdd && styles.disabledButton]}
+                      onPress={() => handleAddPlayer(player)}
+                      disabled={!canAdd}
+                      activeOpacity={0.7}>
+                      <Text style={[styles.addButtonText, !canAdd && styles.disabledButtonText]}>
+                        {canAdd ? '+ Add' : 'Cannot Add'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
             );
           })
         )}
@@ -191,6 +262,55 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
+  },
+  teamInfoBanner: {
+    backgroundColor: colors.white,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    ...shadows.small,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.oceanBright + '20',
+  },
+  teamInfoItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  teamInfoDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: colors.oceanBright + '40',
+  },
+  teamInfoLabel: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  teamInfoValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.oceanDeep,
+  },
+  budgetValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.teal,
+  },
+  errorBanner: {
+    backgroundColor: '#FEE2E2',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FCA5A5',
+  },
+  errorBannerText: {
+    fontSize: 14,
+    color: '#991B1B',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   filterContainer: {
     backgroundColor: colors.white,
@@ -252,9 +372,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: borderRadius.medium,
     marginBottom: spacing.sm,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     ...shadows.small,
     borderLeftWidth: 4,
     borderLeftColor: colors.oceanMedium,
@@ -357,5 +474,44 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 16,
     fontWeight: '700',
+  },
+  actionButtonContainer: {
+    marginTop: spacing.sm,
+    width: '100%',
+  },
+  addButton: {
+    backgroundColor: colors.oceanMedium,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.medium,
+    alignItems: 'center',
+    ...shadows.small,
+  },
+  addButtonText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  removeButton: {
+    backgroundColor: colors.teal + '30',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.medium,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.teal,
+  },
+  removeButtonText: {
+    color: colors.oceanDeep,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  disabledButton: {
+    backgroundColor: colors.backgroundLight,
+    borderWidth: 1,
+    borderColor: colors.textMuted + '40',
+  },
+  disabledButtonText: {
+    color: colors.textMuted,
   },
 });

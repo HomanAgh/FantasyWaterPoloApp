@@ -9,10 +9,22 @@ import {
 } from 'react-native';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { fetchPlayers } from '../services/playerService';
+import { useTeam } from '../context/TeamContext';
 
 export default function HomeScreen({ navigation }) {
   const [playerCount, setPlayerCount] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // Get team stats from context
+  const { selectedPlayers, remainingBudget, totalSpent } = useTeam();
+
+  // Calculate total points from selected players
+  const totalPoints = selectedPlayers.reduce((sum, p) => sum + (p.points || 0), 0);
+
+  // Calculate team completeness
+  const gkCount = selectedPlayers.filter(p => p.position === 'GK').length;
+  const outfieldCount = selectedPlayers.filter(p => p.position === 'Outfield').length;
+  const isTeamComplete = selectedPlayers.length === 12 && gkCount === 2 && outfieldCount === 10;
 
   useEffect(() => {
     loadPlayerStats();
@@ -47,9 +59,9 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.waveIcon}>💧</Text>
         </View>
         <View style={styles.pointsContainer}>
-          <Text style={styles.points}>0</Text>
+          <Text style={styles.points}>{totalPoints}</Text>
           <View style={styles.pointsBadge}>
-            <Text style={styles.pointsBadgeText}>Total: 0</Text>
+            <Text style={styles.pointsBadgeText}>Total: {totalPoints}</Text>
           </View>
         </View>
       </View>
@@ -66,7 +78,38 @@ export default function HomeScreen({ navigation }) {
           </View>
         ) : (
           <>
-            <Text style={styles.cardSubtext}>0 players selected</Text>
+            <Text style={styles.cardSubtext}>
+              {selectedPlayers.length}/12 players selected
+            </Text>
+            {!isTeamComplete && selectedPlayers.length > 0 && (
+              <View style={styles.warningBox}>
+                <Text style={styles.warningText}>
+                  ⚠️ Team incomplete: Need {12 - selectedPlayers.length} more player(s)
+                </Text>
+                {gkCount < 2 && (
+                  <Text style={styles.warningText}>
+                    • Need {2 - gkCount} more goalkeeper(s)
+                  </Text>
+                )}
+                {outfieldCount < 10 && (
+                  <Text style={styles.warningText}>
+                    • Need {10 - outfieldCount} more field player(s)
+                  </Text>
+                )}
+              </View>
+            )}
+            {isTeamComplete && (
+              <View style={styles.successBox}>
+                <Text style={styles.successText}>✓ Team is complete!</Text>
+              </View>
+            )}
+            <View style={styles.budgetInfo}>
+              <Text style={styles.budgetLabel}>Budget Remaining:</Text>
+              <Text style={styles.budgetAmount}>${remainingBudget.toFixed(1)}M</Text>
+            </View>
+            <Text style={styles.cardInfo}>
+              Spent: ${totalSpent.toFixed(1)}M of $100.0M
+            </Text>
             <Text style={styles.cardInfo}>
               {playerCount} players available in database
             </Text>
@@ -227,6 +270,55 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     marginBottom: spacing.md,
+  },
+  warningBox: {
+    backgroundColor: '#FEF3C7',
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  warningText: {
+    fontSize: 13,
+    color: '#92400E',
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  successBox: {
+    backgroundColor: '#D1FAE5',
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#6EE7B7',
+    alignItems: 'center',
+  },
+  successText: {
+    fontSize: 14,
+    color: '#065F46',
+    fontWeight: '700',
+  },
+  budgetInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.oceanBright + '20',
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.oceanBright,
+  },
+  budgetLabel: {
+    fontSize: 14,
+    color: colors.oceanDeep,
+    fontWeight: '600',
+  },
+  budgetAmount: {
+    fontSize: 18,
+    color: colors.teal,
+    fontWeight: 'bold',
   },
   button: {
     backgroundColor: colors.oceanMedium,

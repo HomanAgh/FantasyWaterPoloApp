@@ -7,13 +7,41 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { useTeam } from '../context/TeamContext';
 
 export default function MyTeamScreen({ navigation }) {
-  const teamPositions = [
-    { position: 'Goalkeeper', count: 0, max: 1 },
-    { position: 'Field Players', count: 0, max: 6 },
-    { position: 'Substitutes', count: 0, max: 5 },
-  ];
+  // Get team data from context
+  const { 
+    selectedPlayers, 
+    removePlayer,
+    setPlayerAsStarter,
+    remainingBudget,
+    totalSpent 
+  } = useTeam();
+
+  // Separate players by position and starter status
+  const starters = selectedPlayers.filter(p => p.isStarter);
+  const substitutes = selectedPlayers.filter(p => !p.isStarter);
+
+  const starterGK = starters.find(p => p.position === 'GK');
+  const starterOutfield = starters.filter(p => p.position === 'Outfield');
+
+  const subGK = substitutes.find(p => p.position === 'GK');
+  const subOutfield = substitutes.filter(p => p.position === 'Outfield');
+
+  // Calculate counts for summary
+  const gkCount = selectedPlayers.filter(p => p.position === 'GK').length;
+  const outfieldCount = selectedPlayers.filter(p => p.position === 'Outfield').length;
+  const starterCount = starters.length;
+  const subCount = substitutes.length;
+
+  const handleToggleStarter = async (playerId, currentStatus) => {
+    await setPlayerAsStarter(playerId, !currentStatus);
+  };
+
+  const handleRemovePlayer = async (playerId) => {
+    await removePlayer(playerId);
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -23,67 +51,203 @@ export default function MyTeamScreen({ navigation }) {
           <Text style={styles.title}>My Fantasy Team</Text>
           <View style={styles.budgetBadge}>
             <Text style={styles.budgetLabel}>Budget</Text>
-            <Text style={styles.budgetAmount}>$100.0M</Text>
+            <Text style={styles.budgetAmount}>${remainingBudget.toFixed(1)}M</Text>
           </View>
+          <Text style={styles.spentText}>Spent: ${totalSpent.toFixed(1)}M</Text>
         </View>
       </View>
 
-      {/* Team Formation */}
+      {/* Starters Section */}
       <View style={[styles.card, styles.formationCard]}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Formation</Text>
-          <Text style={styles.formationIcon}>⚽</Text>
+          <Text style={styles.cardTitle}>Starters ({starterCount}/7)</Text>
+          <Text style={styles.formationIcon}>⭐</Text>
         </View>
-        <View style={styles.formationContainer}>
-          <View style={styles.pool}>
-            <Text style={styles.poolIcon}>🏊‍♂️</Text>
-            <Text style={styles.poolLabel}>Pool</Text>
-          </View>
-          <View style={styles.field}>
-            <View style={styles.fieldRow}>
-              <View style={[styles.playerSlot, styles.goalkeeperSlot]}>
-                <Text style={styles.playerSlotEmoji}>🥅</Text>
-                <Text style={styles.playerSlotText}>GK</Text>
+        
+        {/* Starter GK */}
+        <View style={styles.positionSection}>
+          <Text style={styles.positionLabel}>🥅 Goalkeeper (1)</Text>
+          {starterGK ? (
+            <View style={styles.playerCardItem}>
+              <View style={styles.playerCardInfo}>
+                <Text style={styles.playerCardName}>{starterGK.name}</Text>
+                <Text style={styles.playerCardDetails}>
+                  {starterGK.team} • ${starterGK.price.toFixed(1)}M • {starterGK.points} pts
+                </Text>
+              </View>
+              <View style={styles.playerCardActions}>
+                <TouchableOpacity 
+                  style={styles.toggleButton}
+                  onPress={() => handleToggleStarter(starterGK.id, true)}
+                  activeOpacity={0.7}>
+                  <Text style={styles.toggleButtonText}>→ Sub</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.removeButtonSmall}
+                  onPress={() => handleRemovePlayer(starterGK.id)}
+                  activeOpacity={0.7}>
+                  <Text style={styles.removeButtonSmallText}>✕</Text>
+                </TouchableOpacity>
               </View>
             </View>
-            <View style={styles.fieldRow}>
-              {[1, 2, 3].map((i) => (
-                <View key={i} style={[styles.playerSlot, styles.fieldPlayerSlot]}>
-                  <Text style={styles.playerSlotEmoji}>🏊</Text>
-                  <Text style={styles.playerSlotText}>FP</Text>
-                </View>
-              ))}
+          ) : (
+            <View style={styles.emptySlot}>
+              <Text style={styles.emptySlotText}>Empty GK slot</Text>
             </View>
-            <View style={styles.fieldRow}>
-              {[1, 2, 3].map((i) => (
-                <View key={i} style={[styles.playerSlot, styles.fieldPlayerSlot]}>
-                  <Text style={styles.playerSlotEmoji}>🏊</Text>
-                  <Text style={styles.playerSlotText}>FP</Text>
+          )}
+        </View>
+
+        {/* Starter Outfield */}
+        <View style={styles.positionSection}>
+          <Text style={styles.positionLabel}>🏊 Field Players (6)</Text>
+          {[...Array(6)].map((_, i) => 
+            starterOutfield[i] ? (
+              <View key={starterOutfield[i].id} style={styles.playerCardItem}>
+                <View style={styles.playerCardInfo}>
+                  <Text style={styles.playerCardName}>{starterOutfield[i].name}</Text>
+                  <Text style={styles.playerCardDetails}>
+                    {starterOutfield[i].team} • ${starterOutfield[i].price.toFixed(1)}M • {starterOutfield[i].points} pts
+                  </Text>
                 </View>
-              ))}
+                <View style={styles.playerCardActions}>
+                  <TouchableOpacity 
+                    style={styles.toggleButton}
+                    onPress={() => handleToggleStarter(starterOutfield[i].id, true)}
+                    activeOpacity={0.7}>
+                    <Text style={styles.toggleButtonText}>→ Sub</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.removeButtonSmall}
+                    onPress={() => handleRemovePlayer(starterOutfield[i].id)}
+                    activeOpacity={0.7}>
+                    <Text style={styles.removeButtonSmallText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View key={`empty-starter-${i}`} style={styles.emptySlot}>
+                <Text style={styles.emptySlotText}>Empty field player slot</Text>
+              </View>
+            )
+          )}
+        </View>
+      </View>
+
+      {/* Substitutes Section */}
+      <View style={[styles.card, styles.subsCard]}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Substitutes ({subCount}/5)</Text>
+          <Text style={styles.formationIcon}>🔄</Text>
+        </View>
+        
+        {/* Sub GK */}
+        <View style={styles.positionSection}>
+          <Text style={styles.positionLabel}>🥅 Goalkeeper (1)</Text>
+          {subGK ? (
+            <View style={styles.playerCardItem}>
+              <View style={styles.playerCardInfo}>
+                <Text style={styles.playerCardName}>{subGK.name}</Text>
+                <Text style={styles.playerCardDetails}>
+                  {subGK.team} • ${subGK.price.toFixed(1)}M • {subGK.points} pts
+                </Text>
+              </View>
+              <View style={styles.playerCardActions}>
+                <TouchableOpacity 
+                  style={styles.toggleButton}
+                  onPress={() => handleToggleStarter(subGK.id, false)}
+                  activeOpacity={0.7}>
+                  <Text style={styles.toggleButtonText}>→ Start</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.removeButtonSmall}
+                  onPress={() => handleRemovePlayer(subGK.id)}
+                  activeOpacity={0.7}>
+                  <Text style={styles.removeButtonSmallText}>✕</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          ) : (
+            <View style={styles.emptySlot}>
+              <Text style={styles.emptySlotText}>Empty GK slot</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Sub Outfield */}
+        <View style={styles.positionSection}>
+          <Text style={styles.positionLabel}>🏊 Field Players (4)</Text>
+          {[...Array(4)].map((_, i) => 
+            subOutfield[i] ? (
+              <View key={subOutfield[i].id} style={styles.playerCardItem}>
+                <View style={styles.playerCardInfo}>
+                  <Text style={styles.playerCardName}>{subOutfield[i].name}</Text>
+                  <Text style={styles.playerCardDetails}>
+                    {subOutfield[i].team} • ${subOutfield[i].price.toFixed(1)}M • {subOutfield[i].points} pts
+                  </Text>
+                </View>
+                <View style={styles.playerCardActions}>
+                  <TouchableOpacity 
+                    style={styles.toggleButton}
+                    onPress={() => handleToggleStarter(subOutfield[i].id, false)}
+                    activeOpacity={0.7}>
+                    <Text style={styles.toggleButtonText}>→ Start</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.removeButtonSmall}
+                    onPress={() => handleRemovePlayer(subOutfield[i].id)}
+                    activeOpacity={0.7}>
+                    <Text style={styles.removeButtonSmallText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View key={`empty-sub-${i}`} style={styles.emptySlot}>
+                <Text style={styles.emptySlotText}>Empty field player slot</Text>
+              </View>
+            )
+          )}
         </View>
       </View>
 
       {/* Position Summary */}
       <View style={[styles.card, styles.summaryCard]}>
         <Text style={styles.cardTitle}>Team Summary</Text>
-        {teamPositions.map((pos, index) => (
-          <View key={index} style={styles.positionRow}>
-            <View style={styles.positionInfo}>
-              <Text style={styles.positionIcon}>
-                {index === 0 ? '🥅' : index === 1 ? '🏊' : '🔄'}
-              </Text>
-              <Text style={styles.positionName}>{pos.position}</Text>
-            </View>
-            <View style={styles.positionCountBadge}>
-              <Text style={styles.positionCount}>
-                {pos.count} / {pos.max}
-              </Text>
-            </View>
+        <View style={styles.positionRow}>
+          <View style={styles.positionInfo}>
+            <Text style={styles.positionIcon}>🥅</Text>
+            <Text style={styles.positionName}>Goalkeepers</Text>
           </View>
-        ))}
+          <View style={styles.positionCountBadge}>
+            <Text style={styles.positionCount}>{gkCount} / 2</Text>
+          </View>
+        </View>
+        <View style={styles.positionRow}>
+          <View style={styles.positionInfo}>
+            <Text style={styles.positionIcon}>🏊</Text>
+            <Text style={styles.positionName}>Field Players</Text>
+          </View>
+          <View style={styles.positionCountBadge}>
+            <Text style={styles.positionCount}>{outfieldCount} / 10</Text>
+          </View>
+        </View>
+        <View style={styles.positionRow}>
+          <View style={styles.positionInfo}>
+            <Text style={styles.positionIcon}>⭐</Text>
+            <Text style={styles.positionName}>Starters</Text>
+          </View>
+          <View style={styles.positionCountBadge}>
+            <Text style={styles.positionCount}>{starterCount} / 7</Text>
+          </View>
+        </View>
+        <View style={styles.positionRow}>
+          <View style={styles.positionInfo}>
+            <Text style={styles.positionIcon}>🔄</Text>
+            <Text style={styles.positionName}>Substitutes</Text>
+          </View>
+          <View style={styles.positionCountBadge}>
+            <Text style={styles.positionCount}>{subCount} / 5</Text>
+          </View>
+        </View>
       </View>
 
       {/* Action Buttons */}
@@ -158,6 +322,12 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: 'bold',
   },
+  spentText: {
+    fontSize: 12,
+    color: colors.oceanBright,
+    fontWeight: '600',
+    marginTop: spacing.xs,
+  },
   card: {
     backgroundColor: colors.white,
     margin: spacing.md,
@@ -175,6 +345,10 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: colors.teal,
   },
+  subsCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.turquoise,
+  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -189,64 +363,84 @@ const styles = StyleSheet.create({
   formationIcon: {
     fontSize: 24,
   },
-  formationContainer: {
-    alignItems: 'center',
-  },
-  pool: {
-    width: '100%',
-    height: 70,
-    backgroundColor: colors.oceanBright + '20',
-    borderRadius: borderRadius.medium,
-    justifyContent: 'center',
-    alignItems: 'center',
+  positionSection: {
     marginBottom: spacing.lg,
-    borderWidth: 2,
-    borderColor: colors.oceanBright,
-    borderStyle: 'dashed',
   },
-  poolIcon: {
-    fontSize: 24,
+  positionLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.oceanDeep,
+    marginBottom: spacing.sm,
+  },
+  playerCardItem: {
+    backgroundColor: colors.backgroundLight,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    marginBottom: spacing.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.oceanBright + '40',
+  },
+  playerCardInfo: {
+    flex: 1,
+  },
+  playerCardName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.textDark,
     marginBottom: spacing.xs,
   },
-  poolLabel: {
-    fontSize: 16,
-    color: colors.oceanDeep,
+  playerCardDetails: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  playerCardActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  toggleButton: {
+    backgroundColor: colors.oceanMedium,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.small,
+  },
+  toggleButtonText: {
+    color: colors.white,
+    fontSize: 12,
     fontWeight: '700',
   },
-  field: {
-    width: '100%',
-  },
-  fieldRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: spacing.md,
-  },
-  playerSlot: {
-    width: 85,
-    height: 85,
-    borderRadius: borderRadius.medium,
-    borderWidth: 2,
-    borderStyle: 'dashed',
+  removeButtonSmall: {
+    backgroundColor: '#FEE2E2',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    ...shadows.small,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
   },
-  goalkeeperSlot: {
-    backgroundColor: colors.oceanBright + '20',
-    borderColor: colors.oceanMedium,
+  removeButtonSmallText: {
+    color: '#991B1B',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
-  fieldPlayerSlot: {
-    backgroundColor: colors.teal + '20',
-    borderColor: colors.teal,
+  emptySlot: {
+    backgroundColor: colors.backgroundLight,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    marginBottom: spacing.sm,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.textMuted + '40',
+    alignItems: 'center',
   },
-  playerSlotEmoji: {
-    fontSize: 24,
-    marginBottom: spacing.xs,
-  },
-  playerSlotText: {
-    fontSize: 12,
-    color: colors.oceanDeep,
-    fontWeight: '700',
+  emptySlotText: {
+    fontSize: 14,
+    color: colors.textMuted,
+    fontStyle: 'italic',
   },
   positionRow: {
     flexDirection: 'row',

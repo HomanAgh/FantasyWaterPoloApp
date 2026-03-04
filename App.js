@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'react-native';
 import { colors } from './styles/theme';
+import { TeamProvider } from './context/TeamContext';
 
 // Import screens
 import HomeScreen from './screens/HomeScreen';
@@ -73,15 +74,17 @@ function MainTabs() {
 // Root Stack Navigator
 export default function App() {
   return (
-    <NavigationContainer>
-      <StatusBar barStyle="dark-content" />
-      <Stack.Navigator>
-        <Stack.Screen 
-          name="Main" 
-          component={MainTabs}
-          options={{ headerShown: false }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <TeamProvider>
+      <NavigationContainer>
+        <StatusBar barStyle="dark-content" />
+        <Stack.Navigator>
+          <Stack.Screen 
+            name="Main" 
+            component={MainTabs}
+            options={{ headerShown: false }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </TeamProvider>
   );
 }
