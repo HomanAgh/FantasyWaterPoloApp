@@ -11,6 +11,8 @@ import {
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { searchAndFilterPlayers } from '../services/playerService';
 import { useTeam } from '../context/TeamContext';
+import { useRound } from '../context/RoundContext';
+import * as playerRoundPointsService from '../services/playerRoundPointsService';
 
 export default function PlayersScreen() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,6 +32,9 @@ export default function PlayersScreen() {
     remainingBudget,
     canAddPlayer 
   } = useTeam();
+
+  // Get round info from context
+  const { currentRound, isLocked } = useRound();
 
   // Fetch players on mount and when filters change
   useEffect(() => {
@@ -57,6 +62,22 @@ export default function PlayersScreen() {
     if (fetchError) {
       setError('Failed to load players. Please check your connection.');
       setPlayers([]);
+      setLoading(false);
+      return;
+    }
+
+    // Enrich players with gameweek points if round is available
+    if (currentRound && data && data.length > 0) {
+      const playerIds = data.map(p => p.id);
+      const { data: pointsMap } = await playerRoundPointsService
+        .getMultiplePlayersPointsForRound(playerIds, currentRound.id);
+      
+      const enrichedPlayers = data.map(p => ({
+        ...p,
+        gwPoints: pointsMap[p.id] || 0
+      }));
+      
+      setPlayers(enrichedPlayers);
     } else {
       setPlayers(data || []);
     }
@@ -101,6 +122,16 @@ export default function PlayersScreen() {
           <Text style={styles.budgetValue}>${remainingBudget.toFixed(1)}M</Text>
         </View>
       </View>
+
+      {/* Locked Banner */}
+      {isLocked && currentRound && (
+        <View style={styles.lockedBanner}>
+          <Text style={styles.lockedIcon}>🔒</Text>
+          <Text style={styles.lockedText}>
+            Transfers locked - Gameweek {currentRound.round_number} in progress
+          </Text>
+        </View>
+      )}
 
       {/* Error Message */}
       {errorMessage ? (
@@ -194,6 +225,11 @@ export default function PlayersScreen() {
                   <Text style={styles.playerDetails}>
                     {displayPosition} • {player.team}
                   </Text>
+                  {currentRound && player.gwPoints !== undefined && (
+                    <Text style={styles.gameweekPoints}>
+                      GW{currentRound.round_number}: {player.gwPoints} pts
+                    </Text>
+                  )}
                 </View>
                 <View style={styles.playerStats}>
                   <View style={styles.priceBadge}>
@@ -208,19 +244,22 @@ export default function PlayersScreen() {
                 <View style={styles.actionButtonContainer}>
                   {isInTeam ? (
                     <TouchableOpacity 
-                      style={styles.removeButton}
+                      style={[styles.removeButton, isLocked && styles.disabledButton]}
                       onPress={() => handleRemovePlayer(player.id)}
+                      disabled={isLocked}
                       activeOpacity={0.7}>
-                      <Text style={styles.removeButtonText}>✓ In Team</Text>
+                      <Text style={[styles.removeButtonText, isLocked && styles.disabledButtonText]}>
+                        ✓ In Team
+                      </Text>
                     </TouchableOpacity>
                   ) : (
                     <TouchableOpacity 
-                      style={[styles.addButton, !canAdd && styles.disabledButton]}
+                      style={[styles.addButton, (!canAdd || isLocked) && styles.disabledButton]}
                       onPress={() => handleAddPlayer(player)}
-                      disabled={!canAdd}
+                      disabled={!canAdd || isLocked}
                       activeOpacity={0.7}>
-                      <Text style={[styles.addButtonText, !canAdd && styles.disabledButtonText]}>
-                        {canAdd ? '+ Add' : 'Cannot Add'}
+                      <Text style={[styles.addButtonText, (!canAdd || isLocked) && styles.disabledButtonText]}>
+                        {isLocked ? 'Locked' : canAdd ? '+ Add' : 'Cannot Add'}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -513,5 +552,31 @@ const styles = StyleSheet.create({
   },
   disabledButtonText: {
     color: colors.textMuted,
+  },
+  lockedBanner: {
+    backgroundColor: '#FEE2E2',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FCA5A5',
+  },
+  lockedIcon: {
+    fontSize: 20,
+  },
+  lockedText: {
+    fontSize: 14,
+    color: '#991B1B',
+    fontWeight: '700',
+  },
+  gameweekPoints: {
+    fontSize: 13,
+    color: colors.oceanMedium,
+    fontWeight: '600',
+    marginLeft: spacing.md + spacing.xs,
+    marginTop: spacing.xs,
   },
 });

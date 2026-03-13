@@ -40,6 +40,7 @@ export const getUserTeam = async (userId) => {
       price: parseFloat(userTeam.players.price),
       points: userTeam.players.points_total || 0,
       isStarter: userTeam.is_starter,
+      isCaptain: userTeam.is_captain,
       positionOrder: userTeam.position_order,
     })) || [];
 
@@ -146,6 +147,62 @@ export const clearUserTeam = async (userId) => {
     return { data, error: null };
   } catch (error) {
     console.error('Error clearing user team:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Update captain selection for a user
+ * Sets a new captain and removes captain status from previous captain
+ * @param {string} userId - User ID
+ * @param {string} playerId - Player UUID to set as captain
+ * @returns {Promise<{data: Object|null, error: Error|null}>}
+ */
+export const updateCaptain = async (userId, playerId) => {
+  try {
+    // First, remove captain from all players for this user
+    await supabase
+      .from('user_teams')
+      .update({ is_captain: false })
+      .eq('user_id', userId);
+    
+    // Then set new captain
+    const { data, error } = await supabase
+      .from('user_teams')
+      .update({ is_captain: true })
+      .eq('user_id', userId)
+      .eq('player_id', playerId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error updating captain:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Get the current captain for a user
+ * @param {string} userId - User ID
+ * @returns {Promise<{data: string|null, error: Error|null}>}
+ */
+export const getCaptain = async (userId) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_teams')
+      .select('player_id')
+      .eq('user_id', userId)
+      .eq('is_captain', true)
+      .maybeSingle();
+    
+    if (error) throw error;
+    
+    return { data: data?.player_id || null, error: null };
+  } catch (error) {
+    console.error('Error fetching captain:', error);
     return { data: null, error };
   }
 };

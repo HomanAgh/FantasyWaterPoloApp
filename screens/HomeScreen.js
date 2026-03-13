@@ -10,13 +10,18 @@ import {
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { fetchPlayers } from '../services/playerService';
 import { useTeam } from '../context/TeamContext';
+import { useRound } from '../context/RoundContext';
 
 export default function HomeScreen({ navigation }) {
   const [playerCount, setPlayerCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [gameweekPoints, setGameweekPoints] = useState(0);
 
   // Get team stats from context
-  const { selectedPlayers, remainingBudget, totalSpent } = useTeam();
+  const { selectedPlayers, remainingBudget, totalSpent, calculateGameweekPoints } = useTeam();
+
+  // Get round info from context
+  const { currentRound, isLocked, timeToDeadline, formatDeadline } = useRound();
 
   // Calculate total points from selected players
   const totalPoints = selectedPlayers.reduce((sum, p) => sum + (p.points || 0), 0);
@@ -30,6 +35,12 @@ export default function HomeScreen({ navigation }) {
     loadPlayerStats();
   }, []);
 
+  useEffect(() => {
+    if (currentRound && selectedPlayers.length > 0) {
+      loadGameweekPoints();
+    }
+  }, [currentRound, selectedPlayers]);
+
   const loadPlayerStats = async () => {
     setLoading(true);
     const { data, error } = await fetchPlayers();
@@ -39,6 +50,12 @@ export default function HomeScreen({ navigation }) {
     }
     
     setLoading(false);
+  };
+
+  const loadGameweekPoints = async () => {
+    if (!currentRound) return;
+    const points = await calculateGameweekPoints(currentRound.id);
+    setGameweekPoints(points);
   };
 
   return (
@@ -52,17 +69,41 @@ export default function HomeScreen({ navigation }) {
         </View>
       </View>
 
+      {/* Gameweek Banner */}
+      {currentRound && (
+        <View style={styles.gameweekBanner}>
+          <View style={styles.gameweekInfo}>
+            <Text style={styles.gameweekLabel}>Gameweek {currentRound.round_number}</Text>
+            <Text style={styles.deadlineText}>
+              {isLocked ? '🔴 LIVE' : `⏰ Deadline: ${formatDeadline(currentRound.deadline)}`}
+            </Text>
+          </View>
+          {!isLocked && timeToDeadline && (
+            <View style={styles.countdown}>
+              <Text style={styles.countdownText}>{timeToDeadline}</Text>
+            </View>
+          )}
+        </View>
+      )}
+
       {/* Points Summary Card with ocean accent */}
       <View style={[styles.card, styles.pointsCard]}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>This Week's Points</Text>
+          <Text style={styles.cardTitle}>
+            {isLocked ? 'Live Gameweek Points' : 'This Week\'s Points'}
+          </Text>
           <Text style={styles.waveIcon}>💧</Text>
         </View>
         <View style={styles.pointsContainer}>
-          <Text style={styles.points}>{totalPoints}</Text>
+          <Text style={styles.points}>{gameweekPoints}</Text>
           <View style={styles.pointsBadge}>
-            <Text style={styles.pointsBadgeText}>Total: {totalPoints}</Text>
+            <Text style={styles.pointsBadgeText}>
+              Gameweek {currentRound?.round_number || '1'} Total
+            </Text>
           </View>
+          {isLocked && (
+            <Text style={styles.liveIndicator}>● LIVE</Text>
+          )}
         </View>
       </View>
 
@@ -394,6 +435,53 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.xs,
     fontWeight: '600',
+  },
+  gameweekBanner: {
+    backgroundColor: colors.oceanDeep,
+    marginHorizontal: spacing.md,
+    marginTop: -15,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    ...shadows.medium,
+    borderWidth: 2,
+    borderColor: colors.oceanBright,
+  },
+  gameweekInfo: {
+    marginBottom: spacing.sm,
+  },
+  gameweekLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.white,
+    marginBottom: spacing.xs,
+  },
+  deadlineText: {
+    fontSize: 14,
+    color: colors.oceanBright,
+    fontWeight: '600',
+  },
+  countdown: {
+    backgroundColor: colors.oceanBright + '30',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.medium,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.oceanBright,
+  },
+  countdownText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.white,
+    letterSpacing: 1,
+  },
+  liveIndicator: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#EF4444',
+    marginTop: spacing.sm,
+    letterSpacing: 2,
   },
 });
 

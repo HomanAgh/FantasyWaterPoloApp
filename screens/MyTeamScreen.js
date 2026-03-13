@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { useTeam } from '../context/TeamContext';
+import { useRound } from '../context/RoundContext';
 
 export default function MyTeamScreen({ navigation }) {
   // Get team data from context
@@ -16,8 +17,13 @@ export default function MyTeamScreen({ navigation }) {
     removePlayer,
     setPlayerAsStarter,
     remainingBudget,
-    totalSpent 
+    totalSpent,
+    captainId,
+    setCaptain
   } = useTeam();
+
+  // Get round info from context
+  const { currentRound, isLocked } = useRound();
 
   // Separate players by position and starter status
   const starters = selectedPlayers.filter(p => p.isStarter);
@@ -43,6 +49,10 @@ export default function MyTeamScreen({ navigation }) {
     await removePlayer(playerId);
   };
 
+  const handleSetCaptain = async (playerId) => {
+    await setCaptain(playerId, isLocked);
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -56,6 +66,16 @@ export default function MyTeamScreen({ navigation }) {
           <Text style={styles.spentText}>Spent: ${totalSpent.toFixed(1)}M</Text>
         </View>
       </View>
+
+      {/* Locked Team Banner */}
+      {isLocked && currentRound && (
+        <View style={styles.lockedBanner}>
+          <Text style={styles.lockedIcon}>🔒</Text>
+          <Text style={styles.lockedText}>
+            Team Locked - Gameweek {currentRound.round_number} in progress
+          </Text>
+        </View>
+      )}
 
       {/* Starters Section */}
       <View style={[styles.card, styles.formationCard]}>
@@ -77,14 +97,31 @@ export default function MyTeamScreen({ navigation }) {
               </View>
               <View style={styles.playerCardActions}>
                 <TouchableOpacity 
-                  style={styles.toggleButton}
+                  style={[
+                    styles.captainBadge,
+                    starterGK.id === captainId && styles.captainBadgeActive
+                  ]}
+                  onPress={() => !isLocked && handleSetCaptain(starterGK.id)}
+                  disabled={isLocked}
+                  activeOpacity={0.7}>
+                  <Text style={[
+                    styles.captainText,
+                    starterGK.id === captainId && styles.captainTextActive
+                  ]}>
+                    {starterGK.id === captainId ? 'C (2×)' : 'C'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.toggleButton, isLocked && styles.disabledButton]}
                   onPress={() => handleToggleStarter(starterGK.id, true)}
+                  disabled={isLocked}
                   activeOpacity={0.7}>
                   <Text style={styles.toggleButtonText}>→ Sub</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={styles.removeButtonSmall}
+                  style={[styles.removeButtonSmall, isLocked && styles.disabledButton]}
                   onPress={() => handleRemovePlayer(starterGK.id)}
+                  disabled={isLocked}
                   activeOpacity={0.7}>
                   <Text style={styles.removeButtonSmallText}>✕</Text>
                 </TouchableOpacity>
@@ -111,14 +148,31 @@ export default function MyTeamScreen({ navigation }) {
                 </View>
                 <View style={styles.playerCardActions}>
                   <TouchableOpacity 
-                    style={styles.toggleButton}
+                    style={[
+                      styles.captainBadge,
+                      starterOutfield[i].id === captainId && styles.captainBadgeActive
+                    ]}
+                    onPress={() => !isLocked && handleSetCaptain(starterOutfield[i].id)}
+                    disabled={isLocked}
+                    activeOpacity={0.7}>
+                    <Text style={[
+                      styles.captainText,
+                      starterOutfield[i].id === captainId && styles.captainTextActive
+                    ]}>
+                      {starterOutfield[i].id === captainId ? 'C (2×)' : 'C'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.toggleButton, isLocked && styles.disabledButton]}
                     onPress={() => handleToggleStarter(starterOutfield[i].id, true)}
+                    disabled={isLocked}
                     activeOpacity={0.7}>
                     <Text style={styles.toggleButtonText}>→ Sub</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
-                    style={styles.removeButtonSmall}
+                    style={[styles.removeButtonSmall, isLocked && styles.disabledButton]}
                     onPress={() => handleRemovePlayer(starterOutfield[i].id)}
+                    disabled={isLocked}
                     activeOpacity={0.7}>
                     <Text style={styles.removeButtonSmallText}>✕</Text>
                   </TouchableOpacity>
@@ -153,14 +207,16 @@ export default function MyTeamScreen({ navigation }) {
               </View>
               <View style={styles.playerCardActions}>
                 <TouchableOpacity 
-                  style={styles.toggleButton}
+                  style={[styles.toggleButton, isLocked && styles.disabledButton]}
                   onPress={() => handleToggleStarter(subGK.id, false)}
+                  disabled={isLocked}
                   activeOpacity={0.7}>
                   <Text style={styles.toggleButtonText}>→ Start</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={styles.removeButtonSmall}
+                  style={[styles.removeButtonSmall, isLocked && styles.disabledButton]}
                   onPress={() => handleRemovePlayer(subGK.id)}
+                  disabled={isLocked}
                   activeOpacity={0.7}>
                   <Text style={styles.removeButtonSmallText}>✕</Text>
                 </TouchableOpacity>
@@ -187,14 +243,16 @@ export default function MyTeamScreen({ navigation }) {
                 </View>
                 <View style={styles.playerCardActions}>
                   <TouchableOpacity 
-                    style={styles.toggleButton}
+                    style={[styles.toggleButton, isLocked && styles.disabledButton]}
                     onPress={() => handleToggleStarter(subOutfield[i].id, false)}
+                    disabled={isLocked}
                     activeOpacity={0.7}>
                     <Text style={styles.toggleButtonText}>→ Start</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
-                    style={styles.removeButtonSmall}
+                    style={[styles.removeButtonSmall, isLocked && styles.disabledButton]}
                     onPress={() => handleRemovePlayer(subOutfield[i].id)}
+                    disabled={isLocked}
                     activeOpacity={0.7}>
                     <Text style={styles.removeButtonSmallText}>✕</Text>
                   </TouchableOpacity>
@@ -253,15 +311,17 @@ export default function MyTeamScreen({ navigation }) {
       {/* Action Buttons */}
       <View style={styles.card}>
         <TouchableOpacity
-          style={styles.primaryButton}
+          style={[styles.primaryButton, isLocked && styles.disabledButton]}
           onPress={() => navigation.navigate('Players')}
+          disabled={isLocked}
           activeOpacity={0.8}>
           <Text style={styles.buttonIcon}>➕</Text>
           <Text style={styles.primaryButtonText}>Add Players</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.secondaryButton}
+          style={[styles.secondaryButton, isLocked && styles.disabledButton]}
           onPress={() => navigation.navigate('Transfers')}
+          disabled={isLocked}
           activeOpacity={0.8}>
           <Text style={styles.buttonIcon}>🔄</Text>
           <Text style={styles.secondaryButtonText}>Make Transfers</Text>
@@ -513,5 +573,51 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     textAlign: 'center',
+  },
+  lockedBanner: {
+    backgroundColor: '#FEE2E2',
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    borderWidth: 2,
+    borderColor: '#FCA5A5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  lockedIcon: {
+    fontSize: 20,
+  },
+  lockedText: {
+    fontSize: 14,
+    color: '#991B1B',
+    fontWeight: '700',
+  },
+  captainBadge: {
+    backgroundColor: colors.backgroundLight,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.textMuted,
+  },
+  captainBadgeActive: {
+    backgroundColor: '#FCD34D',
+    borderColor: '#F59E0B',
+  },
+  captainText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  captainTextActive: {
+    color: '#92400E',
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
 });

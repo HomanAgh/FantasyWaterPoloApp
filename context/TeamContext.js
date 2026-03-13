@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { getUserId } from '../utils/userIdHelper';
 import * as userTeamService from '../services/userTeamService';
+import * as playerRoundPointsService from '../services/playerRoundPointsService';
 
 // Constants
 const STARTING_BUDGET = 100.0; // $100M
@@ -36,6 +37,7 @@ export const TeamProvider = ({ children }) => {
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [userId, setUserId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [captainId, setCaptainId] = useState(null);
 
   // Initialize user ID and load team on mount
   useEffect(() => {
@@ -76,6 +78,10 @@ export const TeamProvider = ({ children }) => {
       }
 
       setSelectedPlayers(data || []);
+      
+      // Extract and set captain
+      const captain = data?.find(p => p.isCaptain);
+      setCaptainId(captain?.id || null);
     } catch (error) {
       console.error('Error in loadUserTeam:', error);
     } finally {
@@ -498,12 +504,91 @@ export const TeamProvider = ({ children }) => {
     );
   };
 
+  /**
+   * Set a player as captain
+   * Captain must be a starter and only one captain allowed
+   * @param {string} playerId - Player ID to set as captain
+   * @param {boolean} isRoundLocked - Whether the current round is locked (passed from RoundContext)
+   * @returns {Promise<{success: boolean, error: string|null}>}
+   */
+  const setCaptain = async (playerId, isRoundLocked = false) => {
+    const player = selectedPlayers.find(p => p.id === playerId);
+    
+    // Validation
+    if (!player) {
+      return { success: false, error: 'Player not in team' };
+    }
+    
+    if (!player.isStarter) {
+      Alert.alert('Invalid Captain', 'Captain must be a starter (one of your 7 starting players).');
+      return { success: false, error: 'Captain must be a starter' };
+    }
+    
+    // Check if round is locked
+    if (isRoundLocked) {
+      Alert.alert('Team Locked', 'Cannot change captain after deadline.');
+      return { success: false, error: 'Round is locked' };
+    }
+    
+    try {
+      // Update in database
+      const { error } = await userTeamService.updateCaptain(userId, playerId);
+      if (error) throw error;
+      
+      // Update local state
+      setCaptainId(playerId);
+      setSelectedPlayers(prev => prev.map(p => ({
+        ...p,
+        isCaptain: p.id === playerId
+      })));
+      
+      return { success: true, error: null };
+    } catch (error) {
+      console.error('Error setting captain:', error);
+      Alert.alert('Error', 'Failed to set captain. Please try again.');
+      return { success: false, error };
+    }
+  };
+
+  /**
+   * Calculate total gameweek points for the team
+   * Includes captain bonus (2x points)
+   * @param {string} roundId - Round UUID
+   * @returns {Promise<number>}
+   */
+  const calculateGameweekPoints = async (roundId) => {
+    if (!roundId) return 0;
+    
+    try {
+      const starters = selectedPlayers.filter(p => p.isStarter);
+      const starterIds = starters.map(p => p.id);
+      
+      if (starterIds.length === 0) return 0;
+      
+      const { data: pointsMap } = await playerRoundPointsService
+        .getMultiplePlayersPointsForRound(starterIds, roundId);
+      
+      let total = 0;
+      starters.forEach(player => {
+        const points = pointsMap[player.id] || 0;
+        const multiplier = player.id === captainId ? 2 : 1;
+        total += points * multiplier;
+      });
+      
+      return total;
+    } catch (error) {
+      console.error('Error calculating gameweek points:', error);
+      return 0;
+    }
+  };
+
   // Context value
   const value = {
     // State
     selectedPlayers,
     userId,
     isLoading,
+    captainId,
 
     // Derived values
     totalSpent,
@@ -531,6 +616,8 @@ export const TeamProvider = ({ children }) => {
     setPlayerAsStarter,
     loadUserTeam,
     clearTeam,
+    setCaptain,
+    calculateGameweekPoints,
 
     // Constants (for UI reference)
     STARTING_BUDGET,
