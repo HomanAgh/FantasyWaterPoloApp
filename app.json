@@ -1,4 +1,39 @@
 {
   "name": "FantasyWaterPoloApp",
-  "displayName": "FantasyWaterPoloApp"
+  "displayName": "Fantasy Water Polo",
+  "expo": {
+    "name": "Fantasy Water Polo",
+    "slug": "fantasy-water-polo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fantasywaterpolo.app",
+      "buildNumber": "1"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.fantasywaterpolo.app",
+      "versionCode": 1
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "3f7b6944-c87b-4fc5-88fd-ecb938571088"
+      }
+    },
+    "owner": "homanagh"
+  }
 }

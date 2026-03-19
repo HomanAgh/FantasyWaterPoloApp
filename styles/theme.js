@@ -34,6 +34,14 @@ export const colors = {
   warning: '#f39c12',         // Warning orange
   error: '#e74c3c',           // Error red
   info: '#3498db',            // Info blue
+  
+  // Pitch-specific colors (for PitchView component)
+  pitch: {
+    background: '#2d8f3a',           // Water polo pool green/blue
+    lines: '#ffffff',                 // White lines
+    starterZone: 'rgba(0, 200, 255, 0.1)',  // Light blue tint for starters
+    benchZone: 'rgba(128, 128, 128, 0.1)',  // Light gray tint for bench
+  },
 };
 
 export const spacing = {

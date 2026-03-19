@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { getUserId } from '../utils/userIdHelper';
+import supabase from '../config/supabaseClient';
 import * as userTeamService from '../services/userTeamService';
 import * as playerRoundPointsService from '../services/playerRoundPointsService';
 
@@ -81,7 +82,26 @@ export const TeamProvider = ({ children }) => {
       
       // Extract and set captain
       const captain = data?.find(p => p.isCaptain);
-      setCaptainId(captain?.id || null);
+      
+      // Auto-assign captain if none exists but we have starters
+      if (!captain && data && data.length > 0) {
+        const starters = data.filter(p => p.isStarter);
+        if (starters.length > 0) {
+          const firstStarter = starters[0];
+          // Set captain in database
+          await userTeamService.updateCaptain(userIdParam, firstStarter.id);
+          // Update local state
+          setCaptainId(firstStarter.id);
+          setSelectedPlayers(prev => prev.map(p => ({
+            ...p,
+            isCaptain: p.id === firstStarter.id
+          })));
+        } else {
+          setCaptainId(null);
+        }
+      } else {
+        setCaptainId(captain?.id || null);
+      }
     } catch (error) {
       console.error('Error in loadUserTeam:', error);
     } finally {
@@ -277,9 +297,9 @@ export const TeamProvider = ({ children }) => {
   /**
    * Add a player to the team
    * @param {Object} player - Player object to add
-   * @param {boolean} isStarter - Whether to add as starter (default: false)
+   * @param {boolean} isStarter - Whether to add as starter (default: auto-determine)
    */
-  const addPlayer = async (player, isStarter = false) => {
+  const addPlayer = async (player, isStarter = null) => {
     // Validate if player can be added
     const validation = canAddPlayer(player);
     if (!validation.canAdd) {
@@ -287,7 +307,19 @@ export const TeamProvider = ({ children }) => {
       return { success: false, error: validation.reason };
     }
 
-    // If adding as starter, validate starter rules
+    // Auto-determine starter status if not explicitly provided
+    if (isStarter === null) {
+      // Check if there's room in starting lineup for this position
+      if (player.position === 'GK' && gkStartersCount < MAX_GK_STARTERS) {
+        isStarter = true;
+      } else if (player.position === 'Outfield' && outfieldStartersCount < MAX_OUTFIELD_STARTERS) {
+        isStarter = true;
+      } else {
+        isStarter = false;
+      }
+    }
+
+    // If explicitly adding as starter, validate starter rules
     if (isStarter) {
       const starterValidation = canSetAsStarter(player, false);
       if (!starterValidation.canSet) {
@@ -312,6 +344,16 @@ export const TeamProvider = ({ children }) => {
         return { success: false, error };
       }
 
+      // Auto-assign captain if this is the first starter and no captain exists
+      if (isStarter && !captainId) {
+        await userTeamService.updateCaptain(userId, player.id);
+        setCaptainId(player.id);
+        setSelectedPlayers(prev => prev.map(p => ({
+          ...p,
+          isCaptain: p.id === player.id
+        })));
+      }
+
       return { success: true, error: null };
     } catch (error) {
       console.error('Error in addPlayer:', error);
@@ -333,8 +375,31 @@ export const TeamProvider = ({ children }) => {
     }
 
     try {
+      // Check if removing captain
+      const removingCaptain = playerId === captainId;
+      const previousCaptainId = captainId;
+      
       // Optimistic update: Update local state immediately
       setSelectedPlayers((prev) => prev.filter((p) => p.id !== playerId));
+
+      // If removing captain, find new captain among remaining starters
+      if (removingCaptain) {
+        const remainingStarters = selectedPlayers.filter(p => 
+          p.id !== playerId && p.isStarter
+        );
+        
+        if (remainingStarters.length > 0) {
+          const newCaptain = remainingStarters[0];
+          setCaptainId(newCaptain.id);
+          setSelectedPlayers(prev => prev.map(p => ({
+            ...p,
+            isCaptain: p.id === newCaptain.id
+          })));
+          await userTeamService.updateCaptain(userId, newCaptain.id);
+        } else {
+          setCaptainId(null);
+        }
+      }
 
       // Remove from Supabase
       const { error } = await userTeamService.removePlayerFromTeam(userId, playerId);
@@ -342,6 +407,7 @@ export const TeamProvider = ({ children }) => {
       if (error) {
         // Revert optimistic update on error
         setSelectedPlayers((prev) => [...prev, playerToRemove]);
+        setCaptainId(previousCaptainId);
         Alert.alert('Error', 'Failed to remove player from team. Please try again.');
         return { success: false, error };
       }
@@ -401,6 +467,16 @@ export const TeamProvider = ({ children }) => {
         return { success: false, error };
       }
 
+      // Auto-assign captain if this is the first starter and no captain exists
+      if (isStarter && !captainId) {
+        await userTeamService.updateCaptain(userId, playerId);
+        setCaptainId(playerId);
+        setSelectedPlayers(prev => prev.map(p => ({
+          ...p,
+          isCaptain: p.id === playerId
+        })));
+      }
+
       return { success: true, error: null };
     } catch (error) {
       console.error('Error in setPlayerAsStarter:', error);
@@ -418,9 +494,11 @@ export const TeamProvider = ({ children }) => {
     try {
       // Store previous state for potential rollback
       const previousState = [...selectedPlayers];
+      const previousCaptainId = captainId;
 
       // Optimistic update: Clear local state immediately
       setSelectedPlayers([]);
+      setCaptainId(null);
 
       // Clear from Supabase
       const { error } = await userTeamService.clearUserTeam(userId);
@@ -428,6 +506,7 @@ export const TeamProvider = ({ children }) => {
       if (error) {
         // Revert optimistic update on error
         setSelectedPlayers(previousState);
+        setCaptainId(previousCaptainId);
         Alert.alert('Error', 'Failed to clear team. Please try again.');
         return { success: false, error };
       }
@@ -438,6 +517,112 @@ export const TeamProvider = ({ children }) => {
       // Reload team on error
       await loadUserTeam();
       Alert.alert('Error', 'Failed to clear team. Please try again.');
+      return { success: false, error };
+    }
+  };
+
+  /**
+   * Swap two players' starter/substitute status
+   * @param {string} playerId1 - First player ID
+   * @param {string} playerId2 - Second player ID
+   * @returns {Promise<{success: boolean, error: any}>}
+   */
+  const swapPlayers = async (playerId1, playerId2) => {
+    const player1 = selectedPlayers.find(p => p.id === playerId1);
+    const player2 = selectedPlayers.find(p => p.id === playerId2);
+    
+    if (!player1 || !player2) {
+      return { success: false, error: 'Players not found' };
+    }
+    
+    // Validate same position
+    if (player1.position !== player2.position) {
+      Alert.alert('Invalid Swap', 'You can only swap players in the same position (GK with GK, Outfield with Outfield).');
+      return { success: false, error: 'Position mismatch' };
+    }
+    
+    try {
+      // Store previous state for rollback
+      const previousState = [...selectedPlayers];
+      const previousCaptainId = captainId;
+      
+      // Check if captain is being moved to bench
+      const captainMovingToBench = (player1.id === captainId && player1.isStarter) || 
+                                     (player2.id === captainId && player2.isStarter);
+      
+      // Determine new starters after swap
+      const getNewStarterStatus = (p) => {
+        if (p.id === playerId1) return player2.isStarter;
+        if (p.id === playerId2) return player1.isStarter;
+        return p.isStarter;
+      };
+      
+      // If captain moving to bench, find the first available starter to become new captain
+      let newCaptainId = captainId;
+      if (captainMovingToBench) {
+        const remainingStarters = selectedPlayers.filter(p => 
+          getNewStarterStatus(p) && p.id !== player1.id && p.id !== player2.id
+        );
+        
+        // Add the player who is becoming a starter (if any)
+        const playerBecomingStarter = player1.isStarter ? player2 : player1;
+        if (getNewStarterStatus(playerBecomingStarter)) {
+          remainingStarters.push(playerBecomingStarter);
+        }
+        
+        // Auto-assign captain to first starter
+        if (remainingStarters.length > 0) {
+          newCaptainId = remainingStarters[0].id;
+        } else {
+          newCaptainId = null;
+        }
+      }
+      
+      // Optimistic update: Swap their isStarter status and update captain
+      setSelectedPlayers(prev => prev.map(p => {
+        const newIsStarter = getNewStarterStatus(p);
+        return { 
+          ...p, 
+          isStarter: newIsStarter,
+          isCaptain: p.id === newCaptainId && newIsStarter
+        };
+      }));
+      
+      // Update captain state
+      setCaptainId(newCaptainId);
+      
+      // If captain changed, update in database
+      if (captainMovingToBench) {
+        if (newCaptainId) {
+          await userTeamService.updateCaptain(userId, newCaptainId);
+        } else {
+          // No starters left, clear captain
+          await supabase
+            .from('user_teams')
+            .update({ is_captain: false })
+            .eq('user_id', userId);
+        }
+      }
+      
+      // Update both players in database
+      const update1 = userTeamService.updatePlayerStatus(userId, playerId1, player2.isStarter);
+      const update2 = userTeamService.updatePlayerStatus(userId, playerId2, player1.isStarter);
+      
+      const [result1, result2] = await Promise.all([update1, update2]);
+      
+      if (result1.error || result2.error) {
+        // Revert on error
+        setSelectedPlayers(previousState);
+        setCaptainId(previousCaptainId);
+        Alert.alert('Error', 'Failed to swap players. Please try again.');
+        return { success: false, error: result1.error || result2.error };
+      }
+      
+      return { success: true, error: null };
+    } catch (error) {
+      console.error('Error in swapPlayers:', error);
+      await loadUserTeam();
+      Alert.alert('Error', 'Failed to swap players. Please try again.');
       return { success: false, error };
     }
   };
@@ -614,6 +799,7 @@ export const TeamProvider = ({ children }) => {
     addPlayer,
     removePlayer,
     setPlayerAsStarter,
+    swapPlayers,
     loadUserTeam,
     clearTeam,
     setCaptain,

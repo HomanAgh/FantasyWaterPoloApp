@@ -77,3 +77,8 @@ yarn-error.log
 # Supabase
 config/supabaseConfig.js
 
+
+# Expo
+.expo
+dist/
+web-build/

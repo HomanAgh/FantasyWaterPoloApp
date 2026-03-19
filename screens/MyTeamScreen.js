@@ -1,69 +1,198 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Modal,
+  Alert,
 } from 'react-native';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
+import PitchView from '../components/PitchView';
+import * as playerRoundPointsService from '../services/playerRoundPointsService';
 
 export default function MyTeamScreen({ navigation }) {
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [swapModalVisible, setSwapModalVisible] = useState(false);
+  const [enrichedPlayers, setEnrichedPlayers] = useState([]);
+
   // Get team data from context
   const { 
     selectedPlayers, 
-    removePlayer,
     setPlayerAsStarter,
+    swapPlayers,
     remainingBudget,
     totalSpent,
     captainId,
-    setCaptain
+    setCaptain,
+    totalPoints,
+    startersCount,
+    goalkeepersCount,
+    outfieldCount,
+    isTeamValid,
   } = useTeam();
 
   // Get round info from context
-  const { currentRound, isLocked } = useRound();
+  const { currentRound, isLocked, timeToDeadline, formatDeadline } = useRound();
 
-  // Separate players by position and starter status
-  const starters = selectedPlayers.filter(p => p.isStarter);
-  const substitutes = selectedPlayers.filter(p => !p.isStarter);
+  /**
+   * Load gameweek points for all players
+   */
+  useEffect(() => {
+    const loadGameweekPoints = async () => {
+      if (!currentRound || selectedPlayers.length === 0) {
+        setEnrichedPlayers(selectedPlayers);
+        return;
+      }
 
-  const starterGK = starters.find(p => p.position === 'GK');
-  const starterOutfield = starters.filter(p => p.position === 'Outfield');
+      const playerIds = selectedPlayers.map(p => p.id);
+      const { data: pointsMap } = await playerRoundPointsService
+        .getMultiplePlayersPointsForRound(playerIds, currentRound.id);
+      
+      const enriched = selectedPlayers.map(p => ({
+        ...p,
+        points: pointsMap[p.id] || 0  // Replace career points with gameweek points
+      }));
+      
+      setEnrichedPlayers(enriched);
+    };
 
-  const subGK = substitutes.find(p => p.position === 'GK');
-  const subOutfield = substitutes.filter(p => p.position === 'Outfield');
+    loadGameweekPoints();
+  }, [currentRound, selectedPlayers]);
 
-  // Calculate counts for summary
-  const gkCount = selectedPlayers.filter(p => p.position === 'GK').length;
-  const outfieldCount = selectedPlayers.filter(p => p.position === 'Outfield').length;
-  const starterCount = starters.length;
-  const subCount = substitutes.length;
+  /**
+   * Calculate live gameweek points (including captain bonus)
+   */
+  const liveGameweekPoints = React.useMemo(() => {
+    if (enrichedPlayers.length === 0) return 0;
+    
+    return enrichedPlayers
+      .filter(p => p.isStarter) // Only count starters
+      .reduce((sum, player) => {
+        const points = player.points || 0;
+        // Captain gets 2x points
+        if (player.id === captainId) {
+          return sum + (points * 2);
+        }
+        return sum + points;
+      }, 0);
+  }, [enrichedPlayers, captainId]);
 
-  const handleToggleStarter = async (playerId, currentStatus) => {
-    await setPlayerAsStarter(playerId, !currentStatus);
+  /**
+   * Handle player card press - show action modal
+   */
+  const handlePlayerPress = (playerId, player) => {
+    setSelectedPlayer(player);
+    setModalVisible(true);
   };
 
-  const handleRemovePlayer = async (playerId) => {
-    await removePlayer(playerId);
+  /**
+   * Handle empty slot press
+   */
+  const handleEmptySlotPress = (position, isStarter) => {
+    Alert.alert(
+      'Add Players',
+      'Go to the Players tab to add more players to your team.',
+      [
+        {
+          text: 'Go to Players',
+          onPress: () => navigation.navigate('Players'),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
   };
 
-  const handleSetCaptain = async (playerId) => {
-    await setCaptain(playerId, isLocked);
+  /**
+   * Show swap modal to select which player to swap with
+   */
+  const handleShowSwapModal = () => {
+    setModalVisible(false);
+    setSwapModalVisible(true);
+  };
+
+  /**
+   * Perform the swap between selected player and chosen swap target
+   */
+  const handleSwapWithPlayer = async (targetPlayerId) => {
+    setSwapModalVisible(false);
+    await swapPlayers(selectedPlayer.id, targetPlayerId);
+    setSelectedPlayer(null);
+  };
+
+  /**
+   * Set player as captain
+   */
+  const handleSetCaptain = async () => {
+    setModalVisible(false);
+    await setCaptain(selectedPlayer.id, isLocked);
+    setSelectedPlayer(null);
+  };
+
+  /**
+   * Close modal
+   */
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setSelectedPlayer(null);
+  };
+
+  /**
+   * Format time to deadline
+   */
+  const getDeadlineText = () => {
+    if (!currentRound) return 'No active round';
+    if (isLocked) return `Gameweek ${currentRound.round_number} - In Progress`;
+    if (timeToDeadline) {
+      const { days, hours, minutes } = timeToDeadline;
+      if (days > 0) return `Deadline: ${days}d ${hours}h`;
+      if (hours > 0) return `Deadline: ${hours}h ${minutes}m`;
+      return `Deadline: ${minutes}m`;
+    }
+    return formatDeadline ? formatDeadline(currentRound.deadline) : 'Deadline passed';
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.teamEmoji}>🏊</Text>
-          <Text style={styles.title}>My Fantasy Team</Text>
-          <View style={styles.budgetBadge}>
-            <Text style={styles.budgetLabel}>Budget</Text>
-            <Text style={styles.budgetAmount}>${remainingBudget.toFixed(1)}M</Text>
+          <Text style={styles.title}>My Team</Text>
+          
+          {/* Budget and Status Row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statBadge}>
+              <Text style={styles.statLabel}>Budget</Text>
+              <Text style={styles.statValue}>${remainingBudget.toFixed(1)}M</Text>
+            </View>
+            <View style={styles.statBadge}>
+              <Text style={styles.statLabel}>Points</Text>
+              <Text style={styles.statValue}>{liveGameweekPoints}</Text>
+            </View>
+            <View style={[styles.statBadge, isTeamValid() && styles.statBadgeSuccess]}>
+              <Text style={styles.statLabel}>Squad</Text>
+              <Text style={styles.statValue}>
+                {selectedPlayers.length}/{12}
+              </Text>
+            </View>
           </View>
-          <Text style={styles.spentText}>Spent: ${totalSpent.toFixed(1)}M</Text>
+
+          {/* Deadline Info */}
+          {currentRound && (
+            <View style={styles.deadlineBadge}>
+              <Text style={styles.deadlineText}>
+                {getDeadlineText()}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -77,257 +206,236 @@ export default function MyTeamScreen({ navigation }) {
         </View>
       )}
 
-      {/* Starters Section */}
-      <View style={[styles.card, styles.formationCard]}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Starters ({starterCount}/7)</Text>
-          <Text style={styles.formationIcon}>⭐</Text>
+      {/* Team Status Message */}
+      {!isTeamValid() && selectedPlayers.length > 0 && (
+        <View style={styles.warningBanner}>
+          <Text style={styles.warningIcon}>⚠️</Text>
+          <View style={styles.warningContent}>
+            <Text style={styles.warningTitle}>Complete Your Team</Text>
+            <Text style={styles.warningText}>
+              {goalkeepersCount < 2 && `Need ${2 - goalkeepersCount} more GK • `}
+              {outfieldCount < 10 && `Need ${10 - outfieldCount} more Outfield • `}
+              {startersCount < 7 && selectedPlayers.length === 12 && `Set ${7 - startersCount} more starters`}
+            </Text>
+          </View>
         </View>
-        
-        {/* Starter GK */}
-        <View style={styles.positionSection}>
-          <Text style={styles.positionLabel}>🥅 Goalkeeper (1)</Text>
-          {starterGK ? (
-            <View style={styles.playerCardItem}>
-              <View style={styles.playerCardInfo}>
-                <Text style={styles.playerCardName}>{starterGK.name}</Text>
-                <Text style={styles.playerCardDetails}>
-                  {starterGK.team} • ${starterGK.price.toFixed(1)}M • {starterGK.points} pts
-                </Text>
-              </View>
-              <View style={styles.playerCardActions}>
-                <TouchableOpacity 
-                  style={[
-                    styles.captainBadge,
-                    starterGK.id === captainId && styles.captainBadgeActive
-                  ]}
-                  onPress={() => !isLocked && handleSetCaptain(starterGK.id)}
-                  disabled={isLocked}
-                  activeOpacity={0.7}>
-                  <Text style={[
-                    styles.captainText,
-                    starterGK.id === captainId && styles.captainTextActive
-                  ]}>
-                    {starterGK.id === captainId ? 'C (2×)' : 'C'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.toggleButton, isLocked && styles.disabledButton]}
-                  onPress={() => handleToggleStarter(starterGK.id, true)}
-                  disabled={isLocked}
-                  activeOpacity={0.7}>
-                  <Text style={styles.toggleButtonText}>→ Sub</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.removeButtonSmall, isLocked && styles.disabledButton]}
-                  onPress={() => handleRemovePlayer(starterGK.id)}
-                  disabled={isLocked}
-                  activeOpacity={0.7}>
-                  <Text style={styles.removeButtonSmallText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.emptySlot}>
-              <Text style={styles.emptySlotText}>Empty GK slot</Text>
-            </View>
-          )}
-        </View>
+      )}
 
-        {/* Starter Outfield */}
-        <View style={styles.positionSection}>
-          <Text style={styles.positionLabel}>🏊 Field Players (6)</Text>
-          {[...Array(6)].map((_, i) => 
-            starterOutfield[i] ? (
-              <View key={starterOutfield[i].id} style={styles.playerCardItem}>
-                <View style={styles.playerCardInfo}>
-                  <Text style={styles.playerCardName}>{starterOutfield[i].name}</Text>
-                  <Text style={styles.playerCardDetails}>
-                    {starterOutfield[i].team} • ${starterOutfield[i].price.toFixed(1)}M • {starterOutfield[i].points} pts
-                  </Text>
-                </View>
-                <View style={styles.playerCardActions}>
-                  <TouchableOpacity 
-                    style={[
-                      styles.captainBadge,
-                      starterOutfield[i].id === captainId && styles.captainBadgeActive
-                    ]}
-                    onPress={() => !isLocked && handleSetCaptain(starterOutfield[i].id)}
-                    disabled={isLocked}
-                    activeOpacity={0.7}>
-                    <Text style={[
-                      styles.captainText,
-                      starterOutfield[i].id === captainId && styles.captainTextActive
-                    ]}>
-                      {starterOutfield[i].id === captainId ? 'C (2×)' : 'C'}
+      {/* Pitch View */}
+      {enrichedPlayers.length > 0 ? (
+        <PitchView
+          players={enrichedPlayers}
+          captainId={captainId}
+          mode="pickTeam"
+          onPlayerPress={handlePlayerPress}
+          onEmptySlotPress={handleEmptySlotPress}
+          isLocked={isLocked}
+        />
+      ) : (
+        <ScrollView style={styles.emptyContainer} contentContainerStyle={styles.emptyContent}>
+          <Text style={styles.emptyEmoji}>🏊‍♂️</Text>
+          <Text style={styles.emptyTitle}>No Players Yet</Text>
+          <Text style={styles.emptyText}>
+            Start building your team by adding players from the Players tab
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyButton}
+            onPress={() => navigation.navigate('Players')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.emptyButtonIcon}>➕</Text>
+            <Text style={styles.emptyButtonText}>Add Players</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      )}
+
+      {/* Action Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={handleCloseModal}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={handleCloseModal}
+        >
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            {selectedPlayer && (
+              <>
+                {/* Player Info Header */}
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalPlayerInfo}>
+                    <Text style={styles.modalPlayerEmoji}>
+                      {selectedPlayer.position === 'GK' ? '🥅' : '🏊'}
                     </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.toggleButton, isLocked && styles.disabledButton]}
-                    onPress={() => handleToggleStarter(starterOutfield[i].id, true)}
-                    disabled={isLocked}
-                    activeOpacity={0.7}>
-                    <Text style={styles.toggleButtonText}>→ Sub</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.removeButtonSmall, isLocked && styles.disabledButton]}
-                    onPress={() => handleRemovePlayer(starterOutfield[i].id)}
-                    disabled={isLocked}
-                    activeOpacity={0.7}>
-                    <Text style={styles.removeButtonSmallText}>✕</Text>
+                    <View>
+                      <Text style={styles.modalPlayerName}>{selectedPlayer.name}</Text>
+                      <Text style={styles.modalPlayerDetails}>
+                        {selectedPlayer.team} • {selectedPlayer.position} • ${selectedPlayer.price.toFixed(1)}M
+                      </Text>
+                    </View>
+                  </View>
+                  {selectedPlayer.id === captainId && (
+                    <View style={styles.modalCaptainBadge}>
+                      <Text style={styles.modalCaptainText}>Captain</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Action Buttons */}
+                <View style={styles.modalActions}>
+                  {/* Set as Captain (only for starters) */}
+                  {selectedPlayer.isStarter && selectedPlayer.id !== captainId && (
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.modalButtonCaptain]}
+                      onPress={handleSetCaptain}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.modalButtonIcon}>⭐</Text>
+                      <Text style={styles.modalButtonText}>Set as Captain</Text>
+                      <Text style={styles.modalButtonSubtext}>2× points</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Swap with Substitute / Swap with Starter */}
+                  {selectedPlayer.isStarter ? (
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.modalButtonSwap]}
+                      onPress={handleShowSwapModal}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.modalButtonIcon}>🔄</Text>
+                      <Text style={styles.modalButtonText}>Swap with Substitute</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.modalButtonSwap]}
+                      onPress={handleShowSwapModal}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.modalButtonIcon}>🔄</Text>
+                      <Text style={styles.modalButtonText}>Swap with Starter</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Cancel Button */}
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.modalButtonCancel]}
+                    onPress={handleCloseModal}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.modalButtonTextCancel}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
-            ) : (
-              <View key={`empty-starter-${i}`} style={styles.emptySlot}>
-                <Text style={styles.emptySlotText}>Empty field player slot</Text>
-              </View>
-            )
-          )}
-        </View>
-      </View>
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
-      {/* Substitutes Section */}
-      <View style={[styles.card, styles.subsCard]}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Substitutes ({subCount}/5)</Text>
-          <Text style={styles.formationIcon}>🔄</Text>
-        </View>
-        
-        {/* Sub GK */}
-        <View style={styles.positionSection}>
-          <Text style={styles.positionLabel}>🥅 Goalkeeper (1)</Text>
-          {subGK ? (
-            <View style={styles.playerCardItem}>
-              <View style={styles.playerCardInfo}>
-                <Text style={styles.playerCardName}>{subGK.name}</Text>
-                <Text style={styles.playerCardDetails}>
-                  {subGK.team} • ${subGK.price.toFixed(1)}M • {subGK.points} pts
-                </Text>
-              </View>
-              <View style={styles.playerCardActions}>
-                <TouchableOpacity 
-                  style={[styles.toggleButton, isLocked && styles.disabledButton]}
-                  onPress={() => handleToggleStarter(subGK.id, false)}
-                  disabled={isLocked}
-                  activeOpacity={0.7}>
-                  <Text style={styles.toggleButtonText}>→ Start</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.removeButtonSmall, isLocked && styles.disabledButton]}
-                  onPress={() => handleRemovePlayer(subGK.id)}
-                  disabled={isLocked}
-                  activeOpacity={0.7}>
-                  <Text style={styles.removeButtonSmallText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.emptySlot}>
-              <Text style={styles.emptySlotText}>Empty GK slot</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Sub Outfield */}
-        <View style={styles.positionSection}>
-          <Text style={styles.positionLabel}>🏊 Field Players (4)</Text>
-          {[...Array(4)].map((_, i) => 
-            subOutfield[i] ? (
-              <View key={subOutfield[i].id} style={styles.playerCardItem}>
-                <View style={styles.playerCardInfo}>
-                  <Text style={styles.playerCardName}>{subOutfield[i].name}</Text>
-                  <Text style={styles.playerCardDetails}>
-                    {subOutfield[i].team} • ${subOutfield[i].price.toFixed(1)}M • {subOutfield[i].points} pts
+      {/* Swap Selection Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={swapModalVisible}
+        onRequestClose={() => setSwapModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setSwapModalVisible(false);
+            setSelectedPlayer(null);
+          }}
+        >
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            {selectedPlayer && (
+              <>
+                {/* Header */}
+                <View style={styles.swapModalHeader}>
+                  <Text style={styles.swapModalTitle}>
+                    Select player to swap with
+                  </Text>
+                  <Text style={styles.swapModalSubtitle}>
+                    {selectedPlayer.name} ({selectedPlayer.position})
                   </Text>
                 </View>
-                <View style={styles.playerCardActions}>
-                  <TouchableOpacity 
-                    style={[styles.toggleButton, isLocked && styles.disabledButton]}
-                    onPress={() => handleToggleStarter(subOutfield[i].id, false)}
-                    disabled={isLocked}
-                    activeOpacity={0.7}>
-                    <Text style={styles.toggleButtonText}>→ Start</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.removeButtonSmall, isLocked && styles.disabledButton]}
-                    onPress={() => handleRemovePlayer(subOutfield[i].id)}
-                    disabled={isLocked}
-                    activeOpacity={0.7}>
-                    <Text style={styles.removeButtonSmallText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              <View key={`empty-sub-${i}`} style={styles.emptySlot}>
-                <Text style={styles.emptySlotText}>Empty field player slot</Text>
-              </View>
-            )
-          )}
-        </View>
-      </View>
 
-      {/* Position Summary */}
-      <View style={[styles.card, styles.summaryCard]}>
-        <Text style={styles.cardTitle}>Team Summary</Text>
-        <View style={styles.positionRow}>
-          <View style={styles.positionInfo}>
-            <Text style={styles.positionIcon}>🥅</Text>
-            <Text style={styles.positionName}>Goalkeepers</Text>
-          </View>
-          <View style={styles.positionCountBadge}>
-            <Text style={styles.positionCount}>{gkCount} / 2</Text>
-          </View>
-        </View>
-        <View style={styles.positionRow}>
-          <View style={styles.positionInfo}>
-            <Text style={styles.positionIcon}>🏊</Text>
-            <Text style={styles.positionName}>Field Players</Text>
-          </View>
-          <View style={styles.positionCountBadge}>
-            <Text style={styles.positionCount}>{outfieldCount} / 10</Text>
-          </View>
-        </View>
-        <View style={styles.positionRow}>
-          <View style={styles.positionInfo}>
-            <Text style={styles.positionIcon}>⭐</Text>
-            <Text style={styles.positionName}>Starters</Text>
-          </View>
-          <View style={styles.positionCountBadge}>
-            <Text style={styles.positionCount}>{starterCount} / 7</Text>
-          </View>
-        </View>
-        <View style={styles.positionRow}>
-          <View style={styles.positionInfo}>
-            <Text style={styles.positionIcon}>🔄</Text>
-            <Text style={styles.positionName}>Substitutes</Text>
-          </View>
-          <View style={styles.positionCountBadge}>
-            <Text style={styles.positionCount}>{subCount} / 5</Text>
-          </View>
-        </View>
-      </View>
+                {/* List of eligible swap candidates */}
+                <ScrollView style={styles.swapPlayersList}>
+                  {enrichedPlayers
+                    .filter(p => 
+                      p.id !== selectedPlayer.id && // Not the same player
+                      p.position === selectedPlayer.position && // Same position
+                      p.isStarter !== selectedPlayer.isStarter // Different starter status
+                    )
+                    .map(player => (
+                      <TouchableOpacity
+                        key={player.id}
+                        style={styles.swapPlayerCard}
+                        onPress={() => handleSwapWithPlayer(player.id)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.swapPlayerInfo}>
+                          <Text style={styles.swapPlayerEmoji}>
+                            {player.position === 'GK' ? '🥅' : '🏊'}
+                          </Text>
+                          <View style={styles.swapPlayerDetails}>
+                            <Text style={styles.swapPlayerName}>{player.name}</Text>
+                            <Text style={styles.swapPlayerMeta}>
+                              {player.team} • {player.points} pts
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={styles.swapPlayerArrow}>→</Text>
+                      </TouchableOpacity>
+                    ))
+                  }
+                </ScrollView>
 
-      {/* Action Buttons */}
-      <View style={styles.card}>
-        <TouchableOpacity
-          style={[styles.primaryButton, isLocked && styles.disabledButton]}
-          onPress={() => navigation.navigate('Players')}
-          disabled={isLocked}
-          activeOpacity={0.8}>
-          <Text style={styles.buttonIcon}>➕</Text>
-          <Text style={styles.primaryButtonText}>Add Players</Text>
+                {/* Cancel Button */}
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => {
+                    setSwapModalVisible(false);
+                    setSelectedPlayer(null);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.secondaryButton, isLocked && styles.disabledButton]}
-          onPress={() => navigation.navigate('Transfers')}
-          disabled={isLocked}
-          activeOpacity={0.8}>
-          <Text style={styles.buttonIcon}>🔄</Text>
-          <Text style={styles.secondaryButtonText}>Make Transfers</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+      </Modal>
+
+      {/* Quick Actions Bar at Bottom */}
+      {selectedPlayers.length > 0 && (
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            style={[styles.bottomButton, isLocked && styles.bottomButtonDisabled]}
+            onPress={() => navigation.navigate('Players')}
+            disabled={isLocked}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.bottomButtonIcon}>➕</Text>
+            <Text style={styles.bottomButtonText}>Add Players</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.bottomButton, styles.bottomButtonSecondary, isLocked && styles.bottomButtonDisabled]}
+            onPress={() => navigation.navigate('Transfers')}
+            disabled={isLocked}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.bottomButtonIcon}>🔄</Text>
+            <Text style={styles.bottomButtonText}>Transfers</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -350,7 +458,7 @@ const styles = StyleSheet.create({
   },
   teamEmoji: {
     fontSize: 40,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   title: {
     fontSize: 28,
@@ -361,218 +469,50 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
-  budgetBadge: {
-    backgroundColor: colors.oceanBright + '30',
+  statsRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  statBadge: {
+    backgroundColor: colors.oceanMedium + '40',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: borderRadius.round,
+    borderRadius: borderRadius.medium,
     borderWidth: 2,
-    borderColor: colors.oceanBright,
-    flexDirection: 'row',
+    borderColor: colors.oceanBright + '60',
     alignItems: 'center',
-    gap: spacing.sm,
+    minWidth: 90,
   },
-  budgetLabel: {
-    fontSize: 12,
+  statBadgeSuccess: {
+    backgroundColor: colors.success + '30',
+    borderColor: colors.success,
+  },
+  statLabel: {
+    fontSize: 11,
     color: colors.oceanBright,
     fontWeight: '600',
+    textTransform: 'uppercase',
+    marginBottom: 2,
   },
-  budgetAmount: {
-    fontSize: 16,
+  statValue: {
+    fontSize: 18,
     color: colors.white,
     fontWeight: 'bold',
   },
-  spentText: {
-    fontSize: 12,
-    color: colors.oceanBright,
-    fontWeight: '600',
+  deadlineBadge: {
+    backgroundColor: colors.warning + '30',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.round,
+    borderWidth: 1,
+    borderColor: colors.warning,
     marginTop: spacing.xs,
   },
-  card: {
-    backgroundColor: colors.white,
-    margin: spacing.md,
-    padding: spacing.lg,
-    borderRadius: borderRadius.large,
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.oceanBright + '20',
-  },
-  formationCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.oceanMedium,
-  },
-  summaryCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.teal,
-  },
-  subsCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.turquoise,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.textDark,
-  },
-  formationIcon: {
-    fontSize: 24,
-  },
-  positionSection: {
-    marginBottom: spacing.lg,
-  },
-  positionLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.oceanDeep,
-    marginBottom: spacing.sm,
-  },
-  playerCardItem: {
-    backgroundColor: colors.backgroundLight,
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    marginBottom: spacing.sm,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.oceanBright + '40',
-  },
-  playerCardInfo: {
-    flex: 1,
-  },
-  playerCardName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.textDark,
-    marginBottom: spacing.xs,
-  },
-  playerCardDetails: {
+  deadlineText: {
     fontSize: 12,
-    color: colors.textMuted,
-  },
-  playerCardActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    alignItems: 'center',
-  },
-  toggleButton: {
-    backgroundColor: colors.oceanMedium,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.small,
-  },
-  toggleButtonText: {
     color: colors.white,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  removeButtonSmall: {
-    backgroundColor: '#FEE2E2',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-  },
-  removeButtonSmallText: {
-    color: '#991B1B',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  emptySlot: {
-    backgroundColor: colors.backgroundLight,
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    marginBottom: spacing.sm,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: colors.textMuted + '40',
-    alignItems: 'center',
-  },
-  emptySlotText: {
-    fontSize: 14,
-    color: colors.textMuted,
-    fontStyle: 'italic',
-  },
-  positionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.oceanBright + '20',
-  },
-  positionInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  positionIcon: {
-    fontSize: 20,
-  },
-  positionName: {
-    fontSize: 16,
-    color: colors.textDark,
     fontWeight: '600',
-  },
-  positionCountBadge: {
-    backgroundColor: colors.oceanBright + '20',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.round,
-    borderWidth: 1,
-    borderColor: colors.oceanBright,
-  },
-  positionCount: {
-    fontSize: 14,
-    color: colors.oceanDeep,
-    fontWeight: '700',
-  },
-  primaryButton: {
-    backgroundColor: colors.oceanMedium,
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    marginBottom: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    ...shadows.small,
-  },
-  buttonIcon: {
-    fontSize: 18,
-  },
-  primaryButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  secondaryButton: {
-    backgroundColor: colors.oceanBright + '30',
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    borderWidth: 2,
-    borderColor: colors.oceanBright,
-    ...shadows.small,
-  },
-  secondaryButtonText: {
-    color: colors.oceanDeep,
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
   },
   lockedBanner: {
     backgroundColor: '#FEE2E2',
@@ -595,29 +535,278 @@ const styles = StyleSheet.create({
     color: '#991B1B',
     fontWeight: '700',
   },
-  captainBadge: {
-    backgroundColor: colors.backgroundLight,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  warningBanner: {
+    backgroundColor: colors.warning + '20',
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    borderWidth: 2,
+    borderColor: colors.warning,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  warningIcon: {
+    fontSize: 24,
+  },
+  warningContent: {
+    flex: 1,
+  },
+  warningTitle: {
+    fontSize: 14,
+    color: colors.textDark,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  warningText: {
+    fontSize: 12,
+    color: colors.textMedium,
+    fontWeight: '600',
+  },
+  emptyContainer: {
+    flex: 1,
+  },
+  emptyContent: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.textMuted,
+    padding: spacing.xl,
   },
-  captainBadgeActive: {
-    backgroundColor: '#FCD34D',
-    borderColor: '#F59E0B',
+  emptyEmoji: {
+    fontSize: 80,
+    marginBottom: spacing.lg,
   },
-  captainText: {
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.textDark,
+    marginBottom: spacing.sm,
+  },
+  emptyText: {
+    fontSize: 16,
     color: colors.textMuted,
-    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+    lineHeight: 24,
+  },
+  emptyButton: {
+    backgroundColor: colors.oceanMedium,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.medium,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    ...shadows.medium,
+  },
+  emptyButtonIcon: {
+    fontSize: 20,
+  },
+  emptyButtonText: {
+    color: colors.white,
+    fontSize: 18,
     fontWeight: 'bold',
   },
-  captainTextActive: {
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    padding: spacing.xl,
+    paddingBottom: spacing.xl + 20,
+    ...shadows.large,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.oceanBright + '20',
+  },
+  modalPlayerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  modalPlayerEmoji: {
+    fontSize: 48,
+  },
+  modalPlayerName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.textDark,
+    marginBottom: 4,
+  },
+  modalPlayerDetails: {
+    fontSize: 14,
+    color: colors.textMuted,
+  },
+  modalCaptainBadge: {
+    backgroundColor: '#FCD34D',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.round,
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+  },
+  modalCaptainText: {
+    fontSize: 12,
+    fontWeight: 'bold',
     color: '#92400E',
   },
-  disabledButton: {
+  modalActions: {
+    gap: spacing.md,
+  },
+  modalButton: {
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    ...shadows.small,
+  },
+  modalButtonCaptain: {
+    backgroundColor: '#FCD34D',
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+  },
+  modalButtonSwap: {
+    backgroundColor: colors.oceanBright + '30',
+    borderWidth: 2,
+    borderColor: colors.oceanMedium,
+  },
+  modalButtonCancel: {
+    backgroundColor: colors.backgroundLight,
+    borderWidth: 2,
+    borderColor: colors.textMuted + '40',
+  },
+  modalButtonIcon: {
+    fontSize: 24,
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.textDark,
+    flex: 1,
+  },
+  modalButtonSubtext: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  modalButtonTextCancel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.textMuted,
+    textAlign: 'center',
+    flex: 1,
+  },
+  // Swap Modal Styles
+  swapModalHeader: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.oceanBright + '20',
+  },
+  swapModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.textDark,
+    marginBottom: spacing.xs,
+  },
+  swapModalSubtitle: {
+    fontSize: 14,
+    color: colors.textMuted,
+  },
+  swapPlayersList: {
+    maxHeight: 300,
+    marginBottom: spacing.md,
+  },
+  swapPlayerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.md,
+    backgroundColor: colors.backgroundLight,
+    borderRadius: borderRadius.medium,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.oceanBright + '30',
+  },
+  swapPlayerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  swapPlayerEmoji: {
+    fontSize: 28,
+    marginRight: spacing.md,
+  },
+  swapPlayerDetails: {
+    flex: 1,
+  },
+  swapPlayerName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.textDark,
+    marginBottom: spacing.xs,
+  },
+  swapPlayerMeta: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  swapPlayerArrow: {
+    fontSize: 20,
+    color: colors.oceanMedium,
+    fontWeight: 'bold',
+  },
+  // Bottom Bar
+  bottomBar: {
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    paddingBottom: spacing.md + 20,
+    flexDirection: 'row',
+    gap: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.oceanBright + '20',
+    ...shadows.large,
+  },
+  bottomButton: {
+    flex: 1,
+    backgroundColor: colors.oceanMedium,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.medium,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    ...shadows.small,
+  },
+  bottomButtonSecondary: {
+    backgroundColor: colors.oceanBright + '30',
+    borderWidth: 2,
+    borderColor: colors.oceanMedium,
+  },
+  bottomButtonDisabled: {
     opacity: 0.5,
+  },
+  bottomButtonIcon: {
+    fontSize: 16,
+  },
+  bottomButtonText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });

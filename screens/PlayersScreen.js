@@ -14,9 +14,19 @@ import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
 import * as playerRoundPointsService from '../services/playerRoundPointsService';
 
-export default function PlayersScreen() {
+export default function PlayersScreen({ navigation, route }) {
+  // Get navigation params
+  const replacingPlayer = route?.params?.replacingPlayer;
+  const filterPosition = route?.params?.filterPosition;
+  const mode = route?.params?.mode || 'add'; // 'add' or 'replace'
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPosition, setSelectedPosition] = useState('All');
+  const [selectedPosition, setSelectedPosition] = useState(() => {
+    // Auto-filter by position if replacing
+    if (filterPosition === 'GK') return 'Goalkeeper';
+    if (filterPosition === 'Outfield') return 'Field Player';
+    return 'All';
+  });
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -87,12 +97,23 @@ export default function PlayersScreen() {
 
   const handleAddPlayer = async (player) => {
     setErrorMessage('');
+    
+    // If replacing, first remove the old player
+    if (mode === 'replace' && replacingPlayer) {
+      await removePlayer(replacingPlayer.id);
+    }
+    
     const result = await addPlayer(player);
     
     if (!result.success) {
       setErrorMessage(result.error || 'Failed to add player');
       // Clear error after 5 seconds
       setTimeout(() => setErrorMessage(''), 5000);
+    } else {
+      // Navigate back to Transfers screen after successful add/replace
+      if (mode === 'replace') {
+        navigation.navigate('Transfers');
+      }
     }
   };
 
@@ -106,7 +127,21 @@ export default function PlayersScreen() {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.headerEmoji}>👥</Text>
-          <Text style={styles.title}>Players</Text>
+          <Text style={styles.title}>
+            {mode === 'replace' && replacingPlayer
+              ? 'Select Replacement'
+              : 'Players'}
+          </Text>
+          {mode === 'replace' && replacingPlayer && (
+            <View style={styles.replacementBanner}>
+              <Text style={styles.replacementText}>
+                Replacing: {replacingPlayer.name}
+              </Text>
+              <Text style={styles.replacementSubtext}>
+                ({replacingPlayer.position}) • ${replacingPlayer.price.toFixed(1)}M
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -259,7 +294,11 @@ export default function PlayersScreen() {
                       disabled={!canAdd || isLocked}
                       activeOpacity={0.7}>
                       <Text style={[styles.addButtonText, (!canAdd || isLocked) && styles.disabledButtonText]}>
-                        {isLocked ? 'Locked' : canAdd ? '+ Add' : 'Cannot Add'}
+                        {isLocked 
+                          ? 'Locked' 
+                          : mode === 'replace' 
+                            ? (canAdd ? 'Replace' : 'Cannot Replace')
+                            : (canAdd ? '+ Add' : 'Cannot Add')}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -578,5 +617,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: spacing.md + spacing.xs,
     marginTop: spacing.xs,
+  },
+  replacementBanner: {
+    backgroundColor: colors.oceanBright + '30',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.medium,
+    marginTop: spacing.sm,
+    borderWidth: 2,
+    borderColor: colors.oceanBright,
+    alignItems: 'center',
+  },
+  replacementText: {
+    fontSize: 14,
+    color: colors.white,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  replacementSubtext: {
+    fontSize: 12,
+    color: colors.white + 'DD',
+    fontWeight: '600',
   },
 });
