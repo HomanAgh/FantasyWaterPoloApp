@@ -7,9 +7,11 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { searchAndFilterPlayers } from '../services/playerService';
+import { fetchTeams } from '../services/teamService';
 import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
 import * as playerRoundPointsService from '../services/playerRoundPointsService';
@@ -27,6 +29,9 @@ export default function PlayersScreen({ navigation, route }) {
     if (filterPosition === 'Outfield') return 'Field Player';
     return 'All';
   });
+  const [selectedTeam, setSelectedTeam] = useState('all');
+  const [teams, setTeams] = useState([]);
+  const [showTeamPicker, setShowTeamPicker] = useState(false);
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,10 +51,22 @@ export default function PlayersScreen({ navigation, route }) {
   // Get round info from context
   const { currentRound, isLocked } = useRound();
 
+  // Load teams on mount
+  useEffect(() => {
+    loadTeams();
+  }, []);
+
+  const loadTeams = async () => {
+    const { data } = await fetchTeams();
+    if (data) {
+      setTeams([{ id: 'all', name: 'All Teams' }, ...data]);
+    }
+  };
+
   // Fetch players on mount and when filters change
   useEffect(() => {
     loadPlayers();
-  }, [selectedPosition]);
+  }, [selectedPosition, selectedTeam]);
 
   // Debounced search effect
   useEffect(() => {
@@ -66,7 +83,8 @@ export default function PlayersScreen({ navigation, route }) {
 
     const { data, error: fetchError } = await searchAndFilterPlayers(
       searchQuery,
-      selectedPosition
+      selectedPosition,
+      selectedTeam
     );
 
     if (fetchError) {
@@ -210,7 +228,65 @@ export default function PlayersScreen({ navigation, route }) {
             </TouchableOpacity>
           ))}
         </ScrollView>
+        
+        {/* Team Dropdown */}
+        <TouchableOpacity
+          style={styles.teamDropdown}
+          onPress={() => setShowTeamPicker(true)}
+          activeOpacity={0.7}>
+          <Text style={styles.teamDropdownLabel}>🏊 Team:</Text>
+          <Text style={styles.teamDropdownValue}>
+            {teams.find(t => t.id === selectedTeam)?.name || 'All Teams'}
+          </Text>
+          <Text style={styles.teamDropdownIcon}>▼</Text>
+        </TouchableOpacity>
       </View>
+
+      {/* Team Picker Modal */}
+      <Modal
+        transparent={true}
+        visible={showTeamPicker}
+        animationType="slide"
+        onRequestClose={() => setShowTeamPicker(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowTeamPicker(false)}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Team</Text>
+              <TouchableOpacity onPress={() => setShowTeamPicker(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalList}>
+              {teams.map((team) => (
+                <TouchableOpacity
+                  key={team.id}
+                  style={[
+                    styles.modalItem,
+                    selectedTeam === team.id && styles.modalItemActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedTeam(team.id);
+                    setShowTeamPicker(false);
+                  }}>
+                  <Text
+                    style={[
+                      styles.modalItemText,
+                      selectedTeam === team.id && styles.modalItemTextActive,
+                    ]}>
+                    {team.name}
+                  </Text>
+                  {selectedTeam === team.id && (
+                    <Text style={styles.modalItemCheck}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Players List */}
       <View style={styles.playersList}>
@@ -638,5 +714,88 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.white + 'DD',
     fontWeight: '600',
+  },
+  teamDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.oceanBright + '40',
+    ...shadows.small,
+  },
+  teamDropdownLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textDark,
+    marginRight: spacing.sm,
+  },
+  teamDropdownValue: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.oceanDeep,
+    fontWeight: '500',
+  },
+  teamDropdownIcon: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+    ...shadows.large,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.oceanBright + '20',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.textDark,
+  },
+  modalClose: {
+    fontSize: 24,
+    color: colors.textMuted,
+    fontWeight: '300',
+  },
+  modalList: {
+    maxHeight: 400,
+  },
+  modalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.oceanBright + '10',
+  },
+  modalItemActive: {
+    backgroundColor: colors.oceanBright + '10',
+  },
+  modalItemText: {
+    fontSize: 16,
+    color: colors.textDark,
+  },
+  modalItemTextActive: {
+    fontWeight: '600',
+    color: colors.oceanDeep,
+  },
+  modalItemCheck: {
+    fontSize: 20,
+    color: colors.success,
   },
 });

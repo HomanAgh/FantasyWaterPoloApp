@@ -118,7 +118,7 @@ export const getRoundStatus = (round) => {
 /**
  * Get time remaining until deadline in a human-readable format
  * @param {Object} round - Round object with deadline property
- * @returns {string|null} - Formatted time string or null if deadline passed
+ * @returns {Object|null} - Object with days, hours, minutes or null if deadline passed
  */
 export const getTimeToDeadline = (round) => {
   if (!round || !round.deadline) return null;
@@ -133,13 +133,8 @@ export const getTimeToDeadline = (round) => {
   const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   
-  if (days > 0) {
-    return `${days}d ${hours}h`;
-  } else if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  } else {
-    return `${minutes}m`;
-  }
+  // Return an object instead of a string
+  return { days, hours, minutes };
 };
 
 /**

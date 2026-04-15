@@ -56,9 +56,10 @@ export const getUserTeam = async (userId) => {
  * @param {string} userId - User ID
  * @param {string} playerId - Player UUID
  * @param {boolean} isStarter - Whether player is a starter (default: false)
+ * @param {number|null} positionOrder - Position order (1-12) for auto-substitution
  * @returns {Promise<{data: Object, error: Error|null}>}
  */
-export const addPlayerToTeam = async (userId, playerId, isStarter = false) => {
+export const addPlayerToTeam = async (userId, playerId, isStarter = false, positionOrder = null) => {
   try {
     const { data, error } = await supabase
       .from('user_teams')
@@ -66,6 +67,7 @@ export const addPlayerToTeam = async (userId, playerId, isStarter = false) => {
         user_id: userId,
         player_id: playerId,
         is_starter: isStarter,
+        position_order: positionOrder,
       })
       .select()
       .single();
@@ -203,6 +205,32 @@ export const getCaptain = async (userId) => {
     return { data: data?.player_id || null, error: null };
   } catch (error) {
     console.error('Error fetching captain:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Update player's position order
+ * @param {string} userId - User ID
+ * @param {string} playerId - Player UUID
+ * @param {number} positionOrder - New position order
+ * @returns {Promise<{data: Object, error: Error|null}>}
+ */
+export const updatePlayerPositionOrder = async (userId, playerId, positionOrder) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_teams')
+      .update({ position_order: positionOrder })
+      .eq('user_id', userId)
+      .eq('player_id', playerId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error updating player position order:', error);
     return { data: null, error };
   }
 };

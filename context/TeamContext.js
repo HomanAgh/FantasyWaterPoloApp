@@ -4,6 +4,7 @@ import { getUserId } from '../utils/userIdHelper';
 import supabase from '../config/supabaseClient';
 import * as userTeamService from '../services/userTeamService';
 import * as playerRoundPointsService from '../services/playerRoundPointsService';
+import * as userProfileService from '../services/userProfileService';
 
 // Constants
 const STARTING_BUDGET = 100.0; // $100M
@@ -39,6 +40,7 @@ export const TeamProvider = ({ children }) => {
   const [userId, setUserId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [captainId, setCaptainId] = useState(null);
+  const [teamName, setTeamName] = useState('My Team');
 
   // Initialize user ID and load team on mount
   useEffect(() => {
@@ -109,6 +111,52 @@ export const TeamProvider = ({ children }) => {
     }
   };
 
+  /**
+   * Load user's team name from profile
+   */
+  const loadTeamName = async (userIdParam = userId) => {
+    if (!userIdParam) return;
+
+    try {
+      const { data, error } = await userProfileService.getUserProfile(userIdParam);
+      
+      if (error) {
+        console.error('Error loading team name:', error);
+        return;
+      }
+
+      if (data) {
+        setTeamName(data.team_name);
+      }
+    } catch (error) {
+      console.error('Error in loadTeamName:', error);
+    }
+  };
+
+  /**
+   * Update user's team name
+   * @param {string} newTeamName - New team name
+   */
+  const updateTeamNameInContext = async (newTeamName) => {
+    if (!userId) return { success: false, error: 'User not initialized' };
+
+    try {
+      const { data, error } = await userProfileService.updateTeamName(userId, newTeamName);
+
+      if (error) {
+        Alert.alert('Error', 'Failed to update team name. Please try again.');
+        return { success: false, error };
+      }
+
+      setTeamName(newTeamName);
+      return { success: true, error: null };
+    } catch (error) {
+      console.error('Error updating team name:', error);
+      Alert.alert('Error', 'Failed to update team name. Please try again.');
+      return { success: false, error };
+    }
+  };
+
   // ===== Derived Values =====
 
   /**
@@ -173,6 +221,37 @@ export const TeamProvider = ({ children }) => {
    * Calculate total points for the team
    */
   const totalPoints = selectedPlayers.reduce((sum, player) => sum + player.points, 0);
+
+  // ===== Helper Functions =====
+
+  /**
+   * Calculate position order for a player
+   * @param {Object} player - Player object
+   * @param {boolean} isStarter - Whether player is a starter
+   * @param {Array} currentTeam - Current team array
+   * @returns {number} Position order (1-12)
+   */
+  const calculatePositionOrder = (player, isStarter, currentTeam) => {
+    if (isStarter) {
+      const starters = currentTeam.filter(p => p.isStarter && p.id !== player.id);
+      const gkStarters = starters.filter(p => p.position === 'GK').length;
+      
+      if (player.position === 'GK') {
+        return 1;
+      } else {
+        return gkStarters + starters.filter(p => p.position === 'Outfield').length + 1;
+      }
+    } else {
+      const bench = currentTeam.filter(p => !p.isStarter && p.id !== player.id);
+      const gkBench = bench.filter(p => p.position === 'GK').length;
+      
+      if (player.position === 'GK') {
+        return 8;
+      } else {
+        return 8 + gkBench + bench.filter(p => p.position === 'Outfield').length + 1;
+      }
+    }
+  };
 
   // ===== Validation Functions =====
 
@@ -329,13 +408,40 @@ export const TeamProvider = ({ children }) => {
       }
     }
 
+    // Calculate position_order
+    let positionOrder = null;
+    
+    if (isStarter) {
+      // Starters: order 1-7
+      const currentStarters = selectedPlayers.filter(p => p.isStarter);
+      const gkStarters = currentStarters.filter(p => p.position === 'GK').length;
+      
+      if (player.position === 'GK') {
+        positionOrder = 1; // GK is always position 1
+      } else {
+        // Outfield starters start at position 2
+        positionOrder = gkStarters + currentStarters.filter(p => p.position === 'Outfield').length + 1;
+      }
+    } else {
+      // Bench: order 8-12
+      const currentBench = selectedPlayers.filter(p => !p.isStarter);
+      const gkBench = currentBench.filter(p => p.position === 'GK').length;
+      
+      if (player.position === 'GK') {
+        positionOrder = 8; // Bench GK is always position 8
+      } else {
+        // Outfield bench starts at position 9
+        positionOrder = 8 + gkBench + currentBench.filter(p => p.position === 'Outfield').length + 1;
+      }
+    }
+
     try {
       // Optimistic update: Update local state immediately
-      const newPlayer = { ...player, isStarter };
+      const newPlayer = { ...player, isStarter, positionOrder };
       setSelectedPlayers((prev) => [...prev, newPlayer]);
 
       // Save to Supabase
-      const { error } = await userTeamService.addPlayerToTeam(userId, player.id, isStarter);
+      const { error } = await userTeamService.addPlayerToTeam(userId, player.id, isStarter, positionOrder);
 
       if (error) {
         // Revert optimistic update on error
@@ -604,18 +710,41 @@ export const TeamProvider = ({ children }) => {
         }
       }
       
-      // Update both players in database
+      // Recalculate position_order for both players after swap
+      const updatedTeam = selectedPlayers.map(p => {
+        const newIsStarter = getNewStarterStatus(p);
+        return { ...p, isStarter: newIsStarter };
+      });
+      
+      const player1NewOrder = calculatePositionOrder(player1, player2.isStarter, updatedTeam);
+      const player2NewOrder = calculatePositionOrder(player2, player1.isStarter, updatedTeam);
+      
+      // Update optimistic state with new position orders
+      setSelectedPlayers(prev => prev.map(p => {
+        if (p.id === playerId1) return { ...p, positionOrder: player1NewOrder };
+        if (p.id === playerId2) return { ...p, positionOrder: player2NewOrder };
+        return p;
+      }));
+      
+      // Update both players in database (status and position_order)
       const update1 = userTeamService.updatePlayerStatus(userId, playerId1, player2.isStarter);
       const update2 = userTeamService.updatePlayerStatus(userId, playerId2, player1.isStarter);
+      const updateOrder1 = userTeamService.updatePlayerPositionOrder(userId, playerId1, player1NewOrder);
+      const updateOrder2 = userTeamService.updatePlayerPositionOrder(userId, playerId2, player2NewOrder);
       
-      const [result1, result2] = await Promise.all([update1, update2]);
+      const [result1, result2, orderResult1, orderResult2] = await Promise.all([
+        update1, 
+        update2, 
+        updateOrder1, 
+        updateOrder2
+      ]);
       
-      if (result1.error || result2.error) {
+      if (result1.error || result2.error || orderResult1.error || orderResult2.error) {
         // Revert on error
         setSelectedPlayers(previousState);
         setCaptainId(previousCaptainId);
         Alert.alert('Error', 'Failed to swap players. Please try again.');
-        return { success: false, error: result1.error || result2.error };
+        return { success: false, error: result1.error || result2.error || orderResult1.error || orderResult2.error };
       }
       
       return { success: true, error: null };
@@ -774,6 +903,7 @@ export const TeamProvider = ({ children }) => {
     userId,
     isLoading,
     captainId,
+    teamName,
 
     // Derived values
     totalSpent,
@@ -801,8 +931,10 @@ export const TeamProvider = ({ children }) => {
     setPlayerAsStarter,
     swapPlayers,
     loadUserTeam,
+    loadTeamName,
     clearTeam,
     setCaptain,
+    updateTeamName: updateTeamNameInContext,
     calculateGameweekPoints,
 
     // Constants (for UI reference)

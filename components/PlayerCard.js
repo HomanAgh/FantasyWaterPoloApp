@@ -140,10 +140,10 @@ const PlayerCard = ({
       width: '100%',
     },
     starterText: {
-      color: colors.textDark,
+      color: colors.pearl,
     },
     substituteText: {
-      color: colors.textMuted,
+      color: colors.pearl,
     },
     valueText: {
       fontSize: 9,

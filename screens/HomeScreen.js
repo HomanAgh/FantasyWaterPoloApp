@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { fetchPlayers } from '../services/playerService';
+import { fetchFixturesForRound } from '../services/fixtureService';
 import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
 
@@ -16,9 +17,10 @@ export default function HomeScreen({ navigation }) {
   const [playerCount, setPlayerCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [gameweekPoints, setGameweekPoints] = useState(0);
+  const [upcomingFixtures, setUpcomingFixtures] = useState([]);
 
   // Get team stats from context
-  const { selectedPlayers, remainingBudget, totalSpent, calculateGameweekPoints } = useTeam();
+  const { selectedPlayers, remainingBudget, totalSpent, calculateGameweekPoints, teamName } = useTeam();
 
   // Get round info from context
   const { currentRound, isLocked, timeToDeadline, formatDeadline } = useRound();
@@ -41,6 +43,12 @@ export default function HomeScreen({ navigation }) {
     }
   }, [currentRound, selectedPlayers]);
 
+  useEffect(() => {
+    if (currentRound) {
+      loadUpcomingFixtures();
+    }
+  }, [currentRound]);
+
   const loadPlayerStats = async () => {
     setLoading(true);
     const { data, error } = await fetchPlayers();
@@ -56,6 +64,20 @@ export default function HomeScreen({ navigation }) {
     if (!currentRound) return;
     const points = await calculateGameweekPoints(currentRound.id);
     setGameweekPoints(points);
+  };
+
+  const loadUpcomingFixtures = async () => {
+    if (!currentRound) return;
+    
+    const { data, error } = await fetchFixturesForRound(currentRound.id);
+    
+    if (!error && data) {
+      // Filter to only scheduled matches and take first 3
+      const upcoming = data
+        .filter(f => f.status === 'scheduled')
+        .slice(0, 3);
+      setUpcomingFixtures(upcoming);
+    }
   };
 
   return (
@@ -80,7 +102,13 @@ export default function HomeScreen({ navigation }) {
           </View>
           {!isLocked && timeToDeadline && (
             <View style={styles.countdown}>
-              <Text style={styles.countdownText}>{timeToDeadline}</Text>
+              <Text style={styles.countdownText}>
+                {timeToDeadline.days > 0 
+                  ? `${timeToDeadline.days}d ${timeToDeadline.hours}h`
+                  : timeToDeadline.hours > 0
+                  ? `${timeToDeadline.hours}h ${timeToDeadline.minutes}m`
+                  : `${timeToDeadline.minutes}m`}
+              </Text>
             </View>
           )}
         </View>
@@ -110,7 +138,7 @@ export default function HomeScreen({ navigation }) {
       {/* Team Overview Card */}
       <View style={[styles.card, styles.teamCard]}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>My Team</Text>
+          <Text style={styles.cardTitle}>{teamName}</Text>
           <Text style={styles.teamIcon}>🏊</Text>
         </View>
         {loading ? (
@@ -196,10 +224,34 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.cardTitle}>Upcoming Fixtures</Text>
           <Text style={styles.fixtureIcon}>📅</Text>
         </View>
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No fixtures scheduled</Text>
-          <Text style={styles.emptySubtext}>Check back soon for matches!</Text>
-        </View>
+        {upcomingFixtures.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No fixtures scheduled</Text>
+            <Text style={styles.emptySubtext}>Check back soon for matches!</Text>
+          </View>
+        ) : (
+          upcomingFixtures.map((fixture) => (
+            <View key={fixture.id} style={styles.fixtureRow}>
+              <View style={styles.fixtureTeams}>
+                <Text style={styles.fixtureTeam} numberOfLines={1}>
+                  {fixture.home_team?.name || 'TBD'}
+                </Text>
+                <Text style={styles.fixtureVs}>vs</Text>
+                <Text style={styles.fixtureTeam} numberOfLines={1}>
+                  {fixture.away_team?.name || 'TBD'}
+                </Text>
+              </View>
+              <Text style={styles.fixtureDate}>
+                {new Date(fixture.match_date).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </Text>
+            </View>
+          ))
+        )}
       </View>
     </ScrollView>
   );
@@ -482,6 +534,39 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     marginTop: spacing.sm,
     letterSpacing: 2,
+  },
+  fixtureRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.oceanBright + '20',
+  },
+  fixtureTeams: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  fixtureTeam: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textDark,
+    flex: 1,
+  },
+  fixtureVs: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '500',
+    paddingHorizontal: spacing.xs,
+  },
+  fixtureDate: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '500',
+    marginLeft: spacing.sm,
   },
 });
 

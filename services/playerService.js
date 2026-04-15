@@ -173,9 +173,10 @@ export const filterPlayersByPosition = async (position) => {
  * Combined search and filter
  * @param {string} query - Search query
  * @param {string} position - 'GK' or 'Outfield' or 'All'
+ * @param {string} teamId - Team filter (team UUID or 'all')
  * @returns {Promise<{data: Array, error: Error|null}>}
  */
-export const searchAndFilterPlayers = async (query, position) => {
+export const searchAndFilterPlayers = async (query, position, teamId = null) => {
   try {
     let queryBuilder = supabase
       .from('players')
@@ -197,6 +198,11 @@ export const searchAndFilterPlayers = async (query, position) => {
     if (position !== 'All') {
       const dbPosition = position === 'Goalkeeper' ? 'GK' : 'Outfield';
       queryBuilder = queryBuilder.eq('position', dbPosition);
+    }
+
+    // Apply team filter if selected
+    if (teamId && teamId !== 'all') {
+      queryBuilder = queryBuilder.eq('team_id', teamId);
     }
 
     const { data, error } = await queryBuilder.order('name', { ascending: true });

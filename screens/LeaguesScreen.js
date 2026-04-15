@@ -1,16 +1,81 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { fetchGlobalLeaderboard, getUserGlobalRank } from '../services/leagueService';
+import { getUserId } from '../utils/userIdHelper';
 
 export default function LeaguesScreen() {
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [userRank, setUserRank] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    initializeScreen();
+  }, []);
+
+  const initializeScreen = async () => {
+    const userId = await getUserId();
+    setCurrentUserId(userId);
+    await loadLeaderboardData(userId);
+  };
+
+  const loadLeaderboardData = async (userId) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Fetch leaderboard and user rank in parallel
+      const [leaderboardResult, rankResult] = await Promise.all([
+        fetchGlobalLeaderboard(50),
+        getUserGlobalRank(userId || currentUserId),
+      ]);
+
+      if (leaderboardResult.error) {
+        throw leaderboardResult.error;
+      }
+
+      if (rankResult.error) {
+        console.warn('Error fetching user rank:', rankResult.error);
+      }
+
+      setLeaderboard(leaderboardResult.data || []);
+      setUserRank(rankResult);
+    } catch (err) {
+      console.error('Error loading leaderboard:', err);
+      setError('Failed to load leaderboard');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadLeaderboardData(currentUserId);
+    setRefreshing(false);
+  }, [currentUserId]);
+
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.oceanMedium}
+          colors={[colors.oceanMedium]}
+        />
+      }>
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.headerEmoji}>🏆</Text>
@@ -19,35 +84,44 @@ export default function LeaguesScreen() {
         </View>
       </View>
 
-      {/* Create/Join League */}
-      <View style={[styles.card, styles.actionsCard]}>
-        <TouchableOpacity 
-          style={styles.primaryButton}
-          activeOpacity={0.8}>
-          <Text style={styles.buttonIcon}>➕</Text>
-          <Text style={styles.primaryButtonText}>Create League</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.secondaryButton}
-          activeOpacity={0.8}>
-          <Text style={styles.buttonIcon}>🔗</Text>
-          <Text style={styles.secondaryButtonText}>Join League</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Your Rank Card */}
+      {userRank && userRank.rank && (
+        <View style={[styles.card, styles.yourRankCard]}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Your Global Rank</Text>
+            <Text style={styles.trophyEmoji}>🎯</Text>
+          </View>
+          <View style={styles.yourRankContent}>
+            <View style={styles.yourRankMain}>
+              <Text style={styles.yourRankNumber}>#{userRank.rank}</Text>
+              <Text style={styles.yourRankPoints}>{userRank.totalPoints} pts</Text>
+            </View>
+            <Text style={styles.yourRankTotal}>
+              of {userRank.totalUsers} managers
+            </Text>
+          </View>
+        </View>
+      )}
 
-      {/* My Leagues */}
-      <View style={[styles.card, styles.leaguesCard]}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>My Leagues</Text>
-          <Text style={styles.leaguesIcon}>👥</Text>
+      {/* Create/Join League - Coming Soon */}
+      <View style={[styles.card, styles.actionsCard]}>
+        <View style={styles.comingSoonBadge}>
+          <Text style={styles.comingSoonText}>🔜 Coming Soon</Text>
         </View>
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>🏊</Text>
-          <Text style={styles.emptyText}>You're not in any leagues yet</Text>
-          <Text style={styles.emptySubtext}>
-            Create or join a league to compete with friends
-          </Text>
-        </View>
+        <TouchableOpacity
+          style={[styles.primaryButton, styles.disabledButton]}
+          activeOpacity={1}
+          disabled={true}>
+          <Text style={styles.buttonIcon}>➕</Text>
+          <Text style={styles.primaryButtonText}>Create Private League</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.secondaryButton, styles.disabledButton]}
+          activeOpacity={1}
+          disabled={true}>
+          <Text style={styles.buttonIcon}>🔗</Text>
+          <Text style={styles.secondaryButtonText}>Join Private League</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Global Leaderboard */}
@@ -56,41 +130,92 @@ export default function LeaguesScreen() {
           <Text style={styles.cardTitle}>Global Leaderboard</Text>
           <Text style={styles.leaderboardIcon}>📊</Text>
         </View>
-        <View style={styles.leaderboardItem}>
-          <View style={[styles.rankBadge, styles.rankGold]}>
-            <Text style={styles.rank}>1</Text>
+
+        {loading && !refreshing ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.oceanMedium} />
+            <Text style={styles.loadingText}>Loading rankings...</Text>
           </View>
-          <View style={styles.leaderboardInfo}>
-            <Text style={styles.leaderboardName}>Manager Name</Text>
-            <View style={styles.pointsContainer}>
-              <Text style={styles.leaderboardPoints}>0 points</Text>
-            </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorEmoji}>⚠️</Text>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => loadLeaderboardData(currentUserId)}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
           </View>
-        </View>
-        <View style={styles.leaderboardItem}>
-          <View style={[styles.rankBadge, styles.rankSilver]}>
-            <Text style={styles.rank}>2</Text>
+        ) : leaderboard.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyEmoji}>🏊</Text>
+            <Text style={styles.emptyText}>No rankings yet</Text>
+            <Text style={styles.emptySubtext}>
+              Be the first to build your team and score points!
+            </Text>
           </View>
-          <View style={styles.leaderboardInfo}>
-            <Text style={styles.leaderboardName}>Manager Name</Text>
-            <View style={styles.pointsContainer}>
-              <Text style={styles.leaderboardPoints}>0 points</Text>
-            </View>
+        ) : (
+          leaderboard.map((entry) => (
+            <LeaderboardItem
+              key={entry.user_id}
+              entry={entry}
+              isCurrentUser={entry.user_id === currentUserId}
+            />
+          ))
+        )}
+      </View>
+
+      <View style={styles.bottomSpacer} />
+    </ScrollView>
+  );
+}
+
+// Leaderboard Item Component
+function LeaderboardItem({ entry, isCurrentUser }) {
+  const getRankStyle = (rank) => {
+    if (rank === 1) return styles.rankGold;
+    if (rank === 2) return styles.rankSilver;
+    if (rank === 3) return styles.rankBronze;
+    return styles.rankDefault;
+  };
+
+  const getRankEmoji = (rank) => {
+    if (rank === 1) return '🥇';
+    if (rank === 2) return '🥈';
+    if (rank === 3) return '🥉';
+    return null;
+  };
+
+  return (
+    <View
+      style={[
+        styles.leaderboardItem,
+        isCurrentUser && styles.currentUserItem,
+      ]}>
+      <View style={[styles.rankBadge, getRankStyle(entry.rank)]}>
+        {getRankEmoji(entry.rank) ? (
+          <Text style={styles.rankEmoji}>{getRankEmoji(entry.rank)}</Text>
+        ) : (
+          <Text style={styles.rank}>{entry.rank}</Text>
+        )}
+      </View>
+      <View style={styles.leaderboardInfo}>
+        <Text style={[styles.leaderboardName, isCurrentUser && styles.currentUserName]}>
+          {entry.team_name}
+          {isCurrentUser && ' (You)'}
+        </Text>
+        <View style={styles.leaderboardMeta}>
+          <View style={styles.pointsContainer}>
+            <Text style={styles.leaderboardPoints}>{entry.total_points} pts</Text>
           </View>
-        </View>
-        <View style={styles.leaderboardItem}>
-          <View style={[styles.rankBadge, styles.rankBronze]}>
-            <Text style={styles.rank}>3</Text>
-          </View>
-          <View style={styles.leaderboardInfo}>
-            <Text style={styles.leaderboardName}>Manager Name</Text>
-            <View style={styles.pointsContainer}>
-              <Text style={styles.leaderboardPoints}>0 points</Text>
-            </View>
-          </View>
+          {entry.gameweeks_played > 0 && (
+            <Text style={styles.gameweeksText}>
+              {entry.gameweeks_played} GW{entry.gameweeks_played !== 1 ? 's' : ''}
+            </Text>
+          )}
         </View>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -138,13 +263,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.oceanBright + '20',
   },
+  yourRankCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.success,
+    backgroundColor: colors.success + '05',
+  },
   actionsCard: {
     borderLeftWidth: 4,
     borderLeftColor: colors.oceanMedium,
-  },
-  leaguesCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.teal,
+    position: 'relative',
   },
   leaderboardCard: {
     borderLeftWidth: 4,
@@ -161,11 +288,52 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.textDark,
   },
-  leaguesIcon: {
+  trophyEmoji: {
     fontSize: 24,
   },
   leaderboardIcon: {
     fontSize: 24,
+  },
+  yourRankContent: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+  },
+  yourRankMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  yourRankNumber: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: colors.success,
+  },
+  yourRankPoints: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.textDark,
+  },
+  yourRankTotal: {
+    fontSize: 14,
+    color: colors.textMuted,
+    fontWeight: '500',
+  },
+  comingSoonBadge: {
+    position: 'absolute',
+    top: -10,
+    right: -10,
+    backgroundColor: colors.warning,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.medium,
+    ...shadows.small,
+    zIndex: 1,
+  },
+  comingSoonText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: colors.white,
   },
   primaryButton: {
     backgroundColor: colors.oceanMedium,
@@ -190,6 +358,9 @@ const styles = StyleSheet.create({
     borderColor: colors.oceanBright,
     ...shadows.small,
   },
+  disabledButton: {
+    opacity: 0.5,
+  },
   buttonIcon: {
     fontSize: 18,
   },
@@ -204,6 +375,40 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     textAlign: 'center',
+  },
+  loadingContainer: {
+    padding: spacing.xl,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: 14,
+    color: colors.textMuted,
+  },
+  errorContainer: {
+    padding: spacing.xl,
+    alignItems: 'center',
+  },
+  errorEmoji: {
+    fontSize: 48,
+    marginBottom: spacing.sm,
+  },
+  errorText: {
+    fontSize: 16,
+    color: colors.error,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  retryButton: {
+    backgroundColor: colors.oceanMedium,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.medium,
+  },
+  retryButtonText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '600',
   },
   emptyContainer: {
     padding: spacing.lg,
@@ -231,6 +436,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.oceanBright + '20',
   },
+  currentUserItem: {
+    backgroundColor: colors.oceanBright + '10',
+    marginHorizontal: -spacing.lg,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.medium,
+  },
   rankBadge: {
     width: 50,
     height: 50,
@@ -241,24 +452,32 @@ const styles = StyleSheet.create({
     ...shadows.small,
   },
   rankGold: {
-    backgroundColor: colors.warning + '30',
+    backgroundColor: '#FFD700' + '30',
     borderWidth: 2,
-    borderColor: colors.warning,
+    borderColor: '#FFD700',
   },
   rankSilver: {
-    backgroundColor: colors.textMuted + '30',
+    backgroundColor: '#C0C0C0' + '30',
     borderWidth: 2,
-    borderColor: colors.textMuted,
+    borderColor: '#C0C0C0',
   },
   rankBronze: {
-    backgroundColor: colors.coral + '30',
+    backgroundColor: '#CD7F32' + '30',
     borderWidth: 2,
-    borderColor: colors.coral,
+    borderColor: '#CD7F32',
+  },
+  rankDefault: {
+    backgroundColor: colors.oceanBright + '20',
+    borderWidth: 2,
+    borderColor: colors.oceanBright,
   },
   rank: {
     fontSize: 20,
     fontWeight: 'bold',
     color: colors.textDark,
+  },
+  rankEmoji: {
+    fontSize: 24,
   },
   leaderboardInfo: {
     flex: 1,
@@ -269,17 +488,33 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: spacing.xs,
   },
+  currentUserName: {
+    color: colors.oceanDeep,
+    fontWeight: '700',
+  },
+  leaderboardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   pointsContainer: {
     backgroundColor: colors.oceanBright + '20',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.round,
-    alignSelf: 'flex-start',
   },
   leaderboardPoints: {
     fontSize: 14,
     color: colors.oceanDeep,
     fontWeight: '600',
+  },
+  gameweeksText: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '500',
+  },
+  bottomSpacer: {
+    height: spacing.xl,
   },
 });
 

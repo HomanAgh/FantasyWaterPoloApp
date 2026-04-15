@@ -34,6 +34,7 @@ export default function MyTeamScreen({ navigation }) {
     goalkeepersCount,
     outfieldCount,
     isTeamValid,
+    teamName,
   } = useTeam();
 
   // Get round info from context
@@ -165,7 +166,7 @@ export default function MyTeamScreen({ navigation }) {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.teamEmoji}>🏊</Text>
-          <Text style={styles.title}>My Team</Text>
+          <Text style={styles.title}>{teamName}</Text>
           
           {/* Budget and Status Row */}
           <View style={styles.statsRow}>
