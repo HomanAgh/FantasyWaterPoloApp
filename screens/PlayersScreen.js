@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   Modal,
+  Alert,
 } from 'react-native';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { searchAndFilterPlayers } from '../services/playerService';
@@ -43,9 +44,13 @@ export default function PlayersScreen({ navigation, route }) {
   const { 
     selectedPlayers, 
     addPlayer, 
-    removePlayer, 
+    removePlayer,
+    makeTransfer,
     remainingBudget,
-    canAddPlayer 
+    canAddPlayer,
+    freeTransfers,
+    pendingDeductions,
+    isUnlimitedPhase,
   } = useTeam();
 
   // Get round info from context
@@ -113,25 +118,63 @@ export default function PlayersScreen({ navigation, route }) {
     setLoading(false);
   };
 
-  const handleAddPlayer = async (player) => {
-    setErrorMessage('');
-    
-    // If replacing, first remove the old player
-    if (mode === 'replace' && replacingPlayer) {
-      await removePlayer(replacingPlayer.id);
-    }
-    
-    const result = await addPlayer(player);
-    
+  const executeTransfer = async (player) => {
+    const result = await makeTransfer(replacingPlayer, player);
     if (!result.success) {
-      setErrorMessage(result.error || 'Failed to add player');
-      // Clear error after 5 seconds
+      setErrorMessage(result.error || 'Failed to transfer player');
       setTimeout(() => setErrorMessage(''), 5000);
     } else {
-      // Navigate back to Transfers screen after successful add/replace
-      if (mode === 'replace') {
-        navigation.navigate('Transfers');
+      navigation.navigate('Transfers');
+    }
+  };
+
+  const handleAddPlayer = async (player) => {
+    setErrorMessage('');
+
+    // Replace mode — use the transfer system
+    if (mode === 'replace' && replacingPlayer) {
+      // In the unlimited pre-GW1 phase, swap freely with no confirmation needed
+      if (isUnlimitedPhase) {
+        await executeTransfer(player);
+        return;
       }
+
+      // Post-GW1: warn the user if this will cost points
+      if (freeTransfers === 0) {
+        const totalAfter = pendingDeductions + 4;
+        Alert.alert(
+          '⚠️ Confirm Transfer (-4 pts)',
+          `OUT  ${replacingPlayer.name}\n${replacingPlayer.team} • ${replacingPlayer.position} • $${replacingPlayer.price.toFixed(1)}M\n\nIN  ${player.name}\n${player.team} • ${player.position} • $${player.price.toFixed(1)}M\n\nNo free transfers remaining. This will cost -4 points.\nTotal point hit this GW: -${totalAfter} pts`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Confirm (-4 pts)',
+              style: 'destructive',
+              onPress: () => executeTransfer(player),
+            },
+          ]
+        );
+        return;
+      }
+
+      // Has a free transfer — confirm before executing
+      const transfersAfter = freeTransfers - 1;
+      Alert.alert(
+        '🔄 Confirm Transfer',
+        `OUT  ${replacingPlayer.name}\n${replacingPlayer.team} • ${replacingPlayer.position} • $${replacingPlayer.price.toFixed(1)}M\n\nIN  ${player.name}\n${player.team} • ${player.position} • $${player.price.toFixed(1)}M\n\nUses 1 free transfer (${transfersAfter} remaining after).`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Confirm Transfer', onPress: () => executeTransfer(player) },
+        ]
+      );
+      return;
+    }
+
+    // Normal add (initial squad building / filling empty slots)
+    const result = await addPlayer(player);
+    if (!result.success) {
+      setErrorMessage(result.error || 'Failed to add player');
+      setTimeout(() => setErrorMessage(''), 5000);
     }
   };
 
@@ -323,24 +366,22 @@ export default function PlayersScreen({ navigation, route }) {
             const canAdd = canAddPlayer(player);
             
             return (
-              <View
+              <TouchableOpacity
                 key={player.id}
-                style={styles.playerCard}>
+                style={styles.playerCard}
+                onPress={() => navigation.navigate('PlayerDetail', { playerId: player.id, player })}
+                activeOpacity={0.85}>
                 <View style={styles.playerInfo}>
                   <View style={styles.playerHeader}>
                     <Text style={styles.playerEmoji}>
                       {player.position === 'GK' ? '🥅' : '🏊'}
                     </Text>
                     <Text style={styles.playerName}>{player.name}</Text>
+                    <Text style={styles.playerInfoIcon}>ⓘ</Text>
                   </View>
                   <Text style={styles.playerDetails}>
                     {displayPosition} • {player.team}
                   </Text>
-                  {currentRound && player.gwPoints !== undefined && (
-                    <Text style={styles.gameweekPoints}>
-                      GW{currentRound.round_number}: {player.gwPoints} pts
-                    </Text>
-                  )}
                 </View>
                 <View style={styles.playerStats}>
                   <View style={styles.priceBadge}>
@@ -356,7 +397,7 @@ export default function PlayersScreen({ navigation, route }) {
                   {isInTeam ? (
                     <TouchableOpacity 
                       style={[styles.removeButton, isLocked && styles.disabledButton]}
-                      onPress={() => handleRemovePlayer(player.id)}
+                      onPress={(e) => { e.stopPropagation(); handleRemovePlayer(player.id); }}
                       disabled={isLocked}
                       activeOpacity={0.7}>
                       <Text style={[styles.removeButtonText, isLocked && styles.disabledButtonText]}>
@@ -366,7 +407,7 @@ export default function PlayersScreen({ navigation, route }) {
                   ) : (
                     <TouchableOpacity 
                       style={[styles.addButton, (!canAdd || isLocked) && styles.disabledButton]}
-                      onPress={() => handleAddPlayer(player)}
+                      onPress={(e) => { e.stopPropagation(); handleAddPlayer(player); }}
                       disabled={!canAdd || isLocked}
                       activeOpacity={0.7}>
                       <Text style={[styles.addButtonText, (!canAdd || isLocked) && styles.disabledButtonText]}>
@@ -379,7 +420,7 @@ export default function PlayersScreen({ navigation, route }) {
                     </TouchableOpacity>
                   )}
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })
         )}
@@ -687,12 +728,10 @@ const styles = StyleSheet.create({
     color: '#991B1B',
     fontWeight: '700',
   },
-  gameweekPoints: {
-    fontSize: 13,
-    color: colors.oceanMedium,
-    fontWeight: '600',
-    marginLeft: spacing.md + spacing.xs,
-    marginTop: spacing.xs,
+  playerInfoIcon: {
+    fontSize: 16,
+    color: colors.oceanBright,
+    marginLeft: spacing.xs,
   },
   replacementBanner: {
     backgroundColor: colors.oceanBright + '30',

@@ -27,6 +27,10 @@ export default function TransfersScreen({ navigation }) {
     goalkeepersCount,
     outfieldCount,
     STARTING_BUDGET,
+    freeTransfers,
+    transfersMadeThisRound,
+    pendingDeductions,
+    isUnlimitedPhase,
   } = useTeam();
 
   // Get round info from context
@@ -189,11 +193,41 @@ export default function TransfersScreen({ navigation }) {
           </View>
 
           {/* Transfer Info */}
-          <View style={styles.transferInfoBadge}>
-            <Text style={styles.transferInfoText}>
-              💧 Free Transfers: Unlimited
-            </Text>
-          </View>
+          {isUnlimitedPhase ? (
+            <View style={styles.transferInfoBadge}>
+              <Text style={styles.transferInfoText}>
+                💧 Free Transfers: Unlimited (Pre-GW1)
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.transferInfoRow}>
+              <View style={[
+                styles.transferInfoBadge,
+                freeTransfers === 0 && styles.transferInfoBadgeWarning,
+              ]}>
+                <Text style={styles.transferInfoText}>
+                  💧 Free Transfers: {freeTransfers}
+                  {freeTransfers === 2 ? ' (Max)' : ''}
+                </Text>
+              </View>
+              {transfersMadeThisRound > 0 && (
+                <View style={styles.transfersMadeBadge}>
+                  <Text style={styles.transfersMadeText}>
+                    {transfersMadeThisRound} made this GW
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Point deductions warning */}
+          {pendingDeductions > 0 && (
+            <View style={styles.deductionBadge}>
+              <Text style={styles.deductionText}>
+                ⚠️ -{pendingDeductions} pts hit this GW
+              </Text>
+            </View>
+          )}
 
           {/* Deadline */}
           {currentRound && (
@@ -489,6 +523,14 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: 'bold',
   },
+  transferInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
   transferInfoBadge: {
     backgroundColor: colors.success + '30',
     paddingHorizontal: spacing.md,
@@ -498,10 +540,42 @@ const styles = StyleSheet.create({
     borderColor: colors.success,
     marginBottom: spacing.xs,
   },
+  transferInfoBadgeWarning: {
+    backgroundColor: colors.warning + '30',
+    borderColor: colors.warning,
+  },
   transferInfoText: {
     fontSize: 11,
     color: colors.white,
     fontWeight: '600',
+  },
+  transfersMadeBadge: {
+    backgroundColor: colors.oceanMedium + '40',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.round,
+    borderWidth: 1,
+    borderColor: colors.oceanBright + '60',
+    marginBottom: spacing.xs,
+  },
+  transfersMadeText: {
+    fontSize: 10,
+    color: colors.white,
+    fontWeight: '600',
+  },
+  deductionBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.round,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    marginBottom: spacing.xs,
+  },
+  deductionText: {
+    fontSize: 11,
+    color: '#991B1B',
+    fontWeight: '700',
   },
   deadlineBadge: {
     backgroundColor: colors.warning + '30',

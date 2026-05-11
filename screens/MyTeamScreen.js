@@ -25,6 +25,7 @@ export default function MyTeamScreen({ navigation }) {
     selectedPlayers, 
     setPlayerAsStarter,
     swapPlayers,
+    reorderOutfieldSubs,
     remainingBudget,
     totalSpent,
     captainId,
@@ -134,6 +135,37 @@ export default function MyTeamScreen({ navigation }) {
   const handleSetCaptain = async () => {
     setModalVisible(false);
     await setCaptain(selectedPlayer.id, isLocked);
+    setSelectedPlayer(null);
+  };
+
+  /**
+   * Outfield substitutes sorted by priority (positionOrder), used for reordering
+   */
+  const sortedOutfieldSubs = enrichedPlayers
+    .filter(p => !p.isStarter && p.position === 'Outfield')
+    .sort((a, b) => (a.positionOrder || 0) - (b.positionOrder || 0));
+
+  /**
+   * Move the selected outfield sub one position higher in priority
+   */
+  const handleMoveSubUp = async () => {
+    const idx = sortedOutfieldSubs.findIndex(p => p.id === selectedPlayer?.id);
+    if (idx <= 0) return;
+    setModalVisible(false);
+    const swapTarget = sortedOutfieldSubs[idx - 1];
+    await reorderOutfieldSubs(selectedPlayer.id, swapTarget.id);
+    setSelectedPlayer(null);
+  };
+
+  /**
+   * Move the selected outfield sub one position lower in priority
+   */
+  const handleMoveSubDown = async () => {
+    const idx = sortedOutfieldSubs.findIndex(p => p.id === selectedPlayer?.id);
+    if (idx < 0 || idx >= sortedOutfieldSubs.length - 1) return;
+    setModalVisible(false);
+    const swapTarget = sortedOutfieldSubs[idx + 1];
+    await reorderOutfieldSubs(selectedPlayer.id, swapTarget.id);
     setSelectedPlayer(null);
   };
 
@@ -320,6 +352,39 @@ export default function MyTeamScreen({ navigation }) {
                       <Text style={styles.modalButtonText}>Swap with Starter</Text>
                     </TouchableOpacity>
                   )}
+
+                  {/* Reorder priority for outfield subs */}
+                  {!selectedPlayer.isStarter && selectedPlayer.position === 'Outfield' && (() => {
+                    const idx = sortedOutfieldSubs.findIndex(p => p.id === selectedPlayer.id);
+                    return (
+                      <View style={styles.reorderRow}>
+                        <TouchableOpacity
+                          style={[
+                            styles.reorderButton,
+                            idx <= 0 && styles.reorderButtonDisabled,
+                          ]}
+                          onPress={handleMoveSubUp}
+                          disabled={idx <= 0}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.reorderButtonIcon}>▲</Text>
+                          <Text style={styles.reorderButtonText}>Higher Priority</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.reorderButton,
+                            idx >= sortedOutfieldSubs.length - 1 && styles.reorderButtonDisabled,
+                          ]}
+                          onPress={handleMoveSubDown}
+                          disabled={idx >= sortedOutfieldSubs.length - 1}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.reorderButtonIcon}>▼</Text>
+                          <Text style={styles.reorderButtonText}>Lower Priority</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })()}
 
                   {/* Cancel Button */}
                   <TouchableOpacity
@@ -809,5 +874,35 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  reorderRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  reorderButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    backgroundColor: colors.teal + '25',
+    borderWidth: 2,
+    borderColor: colors.teal,
+    ...shadows.small,
+  },
+  reorderButtonDisabled: {
+    opacity: 0.35,
+  },
+  reorderButtonIcon: {
+    fontSize: 14,
+    color: colors.teal,
+    fontWeight: 'bold',
+  },
+  reorderButtonText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: colors.teal,
   },
 });

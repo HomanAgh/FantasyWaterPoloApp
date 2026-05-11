@@ -20,13 +20,24 @@ export default function HomeScreen({ navigation }) {
   const [upcomingFixtures, setUpcomingFixtures] = useState([]);
 
   // Get team stats from context
-  const { selectedPlayers, remainingBudget, totalSpent, calculateGameweekPoints, teamName } = useTeam();
+  const {
+    selectedPlayers,
+    remainingBudget,
+    totalSpent,
+    calculateGameweekPoints,
+    teamName,
+    lockedTotalPoints,
+    pendingDeductions,
+    squadFinalized,
+  } = useTeam();
 
   // Get round info from context
   const { currentRound, isLocked, timeToDeadline, formatDeadline } = useRound();
 
-  // Calculate total points from selected players
-  const totalPoints = selectedPlayers.reduce((sum, p) => sum + (p.points || 0), 0);
+  // Overall total comes directly from the DB (global_leaderboard via get_user_global_rank).
+  // That view already includes all rounds including the current one, so we do NOT
+  // add gameweekPoints on top — that would double-count the current GW.
+  const overallTotalPoints = lockedTotalPoints;
 
   // Calculate team completeness
   const gkCount = selectedPlayers.filter(p => p.position === 'GK').length;
@@ -114,24 +125,39 @@ export default function HomeScreen({ navigation }) {
         </View>
       )}
 
-      {/* Points Summary Card with ocean accent */}
+      {/* Points Summary Card */}
       <View style={[styles.card, styles.pointsCard]}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>
-            {isLocked ? 'Live Gameweek Points' : 'This Week\'s Points'}
-          </Text>
+          <Text style={styles.cardTitle}>Points</Text>
           <Text style={styles.waveIcon}>💧</Text>
         </View>
-        <View style={styles.pointsContainer}>
-          <Text style={styles.points}>{gameweekPoints}</Text>
-          <View style={styles.pointsBadge}>
-            <Text style={styles.pointsBadgeText}>
-              Gameweek {currentRound?.round_number || '1'} Total
+
+        {/* GW points row */}
+        <View style={styles.pointsRow}>
+          <View style={styles.pointsBlock}>
+            <Text style={styles.pointsLabel}>
+              {isLocked ? 'GW Live' : `GW ${currentRound?.round_number || 1}`}
             </Text>
+            <Text style={styles.pointsValue}>{gameweekPoints}</Text>
+            {pendingDeductions > 0 && (
+              <Text style={styles.deductionNote}>-{pendingDeductions} hit</Text>
+            )}
+            {isLocked && (
+              <Text style={styles.liveIndicator}>● LIVE</Text>
+            )}
           </View>
-          {isLocked && (
-            <Text style={styles.liveIndicator}>● LIVE</Text>
-          )}
+
+          <View style={styles.pointsDivider} />
+
+          <View style={styles.pointsBlock}>
+            <Text style={styles.pointsLabel}>Total</Text>
+            <Text style={[styles.pointsValue, styles.pointsValueTotal]}>
+              {squadFinalized ? overallTotalPoints : gameweekPoints}
+            </Text>
+            {squadFinalized && (
+              <Text style={styles.pointsSubLabel}>all gameweeks</Text>
+            )}
+          </View>
         </View>
       </View>
 
@@ -334,29 +360,49 @@ const styles = StyleSheet.create({
   fixtureIcon: {
     fontSize: 24,
   },
-  pointsContainer: {
+  pointsRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: spacing.md,
+    justifyContent: 'space-around',
+    paddingVertical: spacing.md,
   },
-  points: {
-    fontSize: 64,
+  pointsBlock: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  pointsDivider: {
+    width: 1,
+    height: 64,
+    backgroundColor: colors.oceanBright + '40',
+  },
+  pointsLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.xs,
+  },
+  pointsSubLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  pointsValue: {
+    fontSize: 52,
     fontWeight: 'bold',
     color: colors.oceanMedium,
     textAlign: 'center',
-    marginBottom: spacing.sm,
   },
-  pointsBadge: {
-    backgroundColor: colors.oceanBright + '20',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.round,
-    borderWidth: 1,
-    borderColor: colors.oceanBright,
+  pointsValueTotal: {
+    color: colors.teal,
   },
-  pointsBadgeText: {
-    fontSize: 14,
-    color: colors.oceanDeep,
-    fontWeight: '600',
+  deductionNote: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#EF4444',
+    marginTop: 2,
   },
   cardSubtext: {
     fontSize: 16,

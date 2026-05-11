@@ -5,6 +5,10 @@ import supabase from '../config/supabaseClient';
 import * as userTeamService from '../services/userTeamService';
 import * as playerRoundPointsService from '../services/playerRoundPointsService';
 import * as userProfileService from '../services/userProfileService';
+import * as transferService from '../services/transferService';
+import * as userGwPicksService from '../services/userGwPicksService';
+import { getUserGlobalRank } from '../services/leagueService';
+import { useRound } from './RoundContext';
 
 // Constants
 const STARTING_BUDGET = 100.0; // $100M
@@ -42,13 +46,26 @@ export const TeamProvider = ({ children }) => {
   const [captainId, setCaptainId] = useState(null);
   const [teamName, setTeamName] = useState('My Team');
 
+  // Transfer state
+  const [freeTransfers, setFreeTransfers] = useState(1);
+  const [lastTransferRoundId, setLastTransferRoundId] = useState(null);
+  const [transfersMadeThisRound, setTransfersMadeThisRound] = useState(0);
+  const [squadFinalized, setSquadFinalized] = useState(false);
+  const [pendingDeductions, setPendingDeductions] = useState(0);
+
+  // Accumulated locked points — sum of all past GW scores from snapshots
+  const [lockedTotalPoints, setLockedTotalPoints] = useState(0);
+
+  // Round context — TeamProvider is always rendered inside RoundProvider
+  const { currentRound, isLocked } = useRound();
+
   // Initialize user ID and load team on mount
   useEffect(() => {
     initializeTeam();
   }, []);
 
   /**
-   * Initialize user ID and load their team
+   * Initialize user ID and load their team + transfer state
    */
   const initializeTeam = async () => {
     try {
@@ -56,11 +73,49 @@ export const TeamProvider = ({ children }) => {
       const id = await getUserId();
       setUserId(id);
       await loadUserTeam(id);
+      await loadTransferState(id);
+      await loadLockedTotalPoints(id);
     } catch (error) {
       console.error('Error initializing team:', error);
       Alert.alert('Error', 'Failed to initialize team. Please restart the app.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  /**
+   * Load transfer state from Supabase into local state
+   */
+  const loadTransferState = async (userIdParam = userId) => {
+    if (!userIdParam) return;
+    try {
+      const { data, error } = await transferService.getTransferState(userIdParam);
+      if (error || !data) return;
+      setFreeTransfers(data.freeTransfers);
+      setLastTransferRoundId(data.lastTransferRoundId);
+      setTransfersMadeThisRound(data.transfersMadeThisRound);
+      setSquadFinalized(data.squadFinalized);
+      setPendingDeductions(data.pendingDeductions);
+    } catch (error) {
+      console.error('Error loading transfer state:', error);
+    }
+  };
+
+  /**
+   * Refresh the accumulated locked total points from all GW snapshots
+   */
+  const loadLockedTotalPoints = async (userIdParam = userId) => {
+    if (!userIdParam) return;
+    try {
+      // Use the DB-authoritative rank/points rather than re-deriving from
+      // user_gw_picks snapshots, which may not exist if the app was closed
+      // when past gameweeks locked.
+      const { totalPoints, error } = await getUserGlobalRank(userIdParam);
+      if (!error) {
+        setLockedTotalPoints(totalPoints ?? 0);
+      }
+    } catch (error) {
+      console.error('Error loading locked total points:', error);
     }
   };
 
@@ -157,7 +212,113 @@ export const TeamProvider = ({ children }) => {
     }
   };
 
+  // ===== Transfer Round Transition =====
+
+  /**
+   * Detect GW changes and handle:
+   *  1. Squad finalization + GW1 snapshot when GW1 deadline passes
+   *  2. Snapshot save when any subsequent GW locks
+   *  3. Free-transfer rollover when a new GW starts
+   */
+  useEffect(() => {
+    if (!userId || !currentRound) return;
+
+    const handleRoundTransition = async () => {
+      // Always read authoritative state from the DB — local state may not be
+      // hydrated yet when this effect fires early (e.g. userId just set but
+      // loadTransferState hasn't completed). Trusting local squadFinalized or
+      // lastTransferRoundId here causes spurious finalizeSquad / rollover calls
+      // on every app reload.
+      const { data: freshState } = await transferService.getTransferState(userId);
+      if (!freshState) return; // DB read failed or no profile yet
+
+      const dbSquadFinalized = freshState.squadFinalized;
+      const dbLastTransferRoundId = freshState.lastTransferRoundId ?? null;
+
+      if (!dbSquadFinalized) {
+        // GW1 deadline passed OR app opened past GW1 for the first time
+        const shouldFinalize =
+          (currentRound.round_number === 1 && isLocked) ||
+          currentRound.round_number > 1;
+
+        if (shouldFinalize) {
+          // Guard: only finalize if the user has actually completed registration
+          // (i.e. their user_profiles row exists). Without this check, the UPDATE
+          // in finalizeSquad crashes with PGRST116 for users mid-registration.
+          const { data: profileCheck } = await userProfileService.getUserProfile(userId);
+          if (!profileCheck) {
+            // Profile doesn't exist yet — user is still on the registration screen.
+            return;
+          }
+
+          // Lock the GW1 squad into a snapshot (only when the deadline has actually passed)
+          if (isLocked && selectedPlayers.length > 0) {
+            await userGwPicksService.saveGwSnapshot(
+              userId, currentRound.id, selectedPlayers, captainId
+            );
+          }
+
+          const { error } = await transferService.finalizeSquad(userId, currentRound.id);
+          if (!error) {
+            setSquadFinalized(true);
+            setLastTransferRoundId(currentRound.id);
+            setFreeTransfers(1);
+            setTransfersMadeThisRound(0);
+            setPendingDeductions(0);
+            await loadLockedTotalPoints(userId);
+          }
+        }
+        return;
+      }
+
+      // Squad already finalized — save snapshot whenever the current round locks.
+      // ignoreDuplicates ensures this is idempotent across app restarts.
+      if (isLocked && selectedPlayers.length > 0) {
+        await userGwPicksService.saveGwSnapshot(
+          userId, currentRound.id, selectedPlayers, captainId
+        );
+        await loadLockedTotalPoints(userId);
+      }
+
+      // New GW started (deadline not yet passed) — award a free transfer.
+      // Use the DB value read above (dbLastTransferRoundId) to avoid stale-closure issues.
+      if (!isLocked && dbLastTransferRoundId !== null && currentRound.id !== dbLastTransferRoundId) {
+        const result = await transferService.processRoundRollover(userId, currentRound.id);
+        if (!result.error && result.data) {
+          setFreeTransfers(result.data.free_transfers);
+          setTransfersMadeThisRound(0);
+          setPendingDeductions(0);
+          setLastTransferRoundId(currentRound.id);
+        }
+      }
+    };
+
+    handleRoundTransition();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, currentRound?.id, isLocked]);
+
+  /**
+   * Snapshot safety net — fires whenever selectedPlayers finishes loading.
+   * The main handleRoundTransition effect above can run before loadUserTeam
+   * completes, leaving selectedPlayers empty and skipping the save.
+   * This effect re-attempts the save once players are actually in state.
+   * saveGwSnapshot uses ignoreDuplicates:true so the first write always wins —
+   * subsequent calls for the same (user, round, player) are silent no-ops.
+   */
+  useEffect(() => {
+    if (!userId || !currentRound || !isLocked) return;
+    if (selectedPlayers.length === 0) return;
+
+    userGwPicksService.saveGwSnapshot(userId, currentRound.id, selectedPlayers, captainId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlayers, isLocked, currentRound?.id, userId]);
+
   // ===== Derived Values =====
+
+  /**
+   * True while GW1 deadline hasn't passed — all squad changes are free.
+   */
+  const isUnlimitedPhase = !squadFinalized;
 
   /**
    * Calculate total spent on selected players
@@ -628,6 +789,152 @@ export const TeamProvider = ({ children }) => {
   };
 
   /**
+   * Perform a transfer: swap playerOut for playerIn.
+   * In the unlimited pre-GW1 phase this is free.
+   * After GW1 it consumes a free transfer or costs -4 points.
+   *
+   * This is implemented as a single atomic state update (one setSelectedPlayers
+   * call) to avoid the stale-state race condition that occurred when removePlayer
+   * and addPlayer were called sequentially — the canAddPlayer validation was
+   * reading the un-updated selectedPlayers and incorrectly seeing a full team.
+   *
+   * @param {Object} playerOut - Player being removed
+   * @param {Object} playerIn  - Player being added
+   * @returns {Promise<{success: boolean, error: any, usesFreeTransfer: boolean, pointCost: number}>}
+   */
+  const makeTransfer = async (playerOut, playerIn) => {
+    const fail = (error) => ({ success: false, error, usesFreeTransfer: false, pointCost: 0 });
+
+    // Find the outgoing player's current slot so the incoming player inherits it
+    const outgoingPlayer = selectedPlayers.find((p) => p.id === playerOut.id);
+    if (!outgoingPlayer) {
+      Alert.alert('Transfer Error', 'The player you are replacing was not found in your team.');
+      return fail('Player not found in team');
+    }
+
+    // Validate playerIn against the team AS IT WILL BE after the remove,
+    // without touching React state at all.
+    const teamAfterRemove = selectedPlayers.filter((p) => p.id !== playerOut.id);
+
+    if (teamAfterRemove.some((p) => p.id === playerIn.id)) {
+      Alert.alert('Cannot Add Player', 'You already have this player in your team.');
+      return fail('Already in team');
+    }
+
+    const budgetAfterRemove = remainingBudget + outgoingPlayer.price;
+    if (budgetAfterRemove < playerIn.price) {
+      const needed = (playerIn.price - budgetAfterRemove).toFixed(1);
+      Alert.alert('Cannot Add Player', `Budget exceeded! You need $${needed}M more.`);
+      return fail('Budget exceeded');
+    }
+
+    const gkCountAfter = teamAfterRemove.filter((p) => p.position === 'GK').length;
+    if (playerIn.position === 'GK' && gkCountAfter >= MAX_GOALKEEPERS) {
+      Alert.alert('Cannot Add Player', `You already have ${MAX_GOALKEEPERS} goalkeepers (maximum allowed).`);
+      return fail('Too many goalkeepers');
+    }
+
+    const outfieldCountAfter = teamAfterRemove.filter((p) => p.position === 'Outfield').length;
+    if (playerIn.position === 'Outfield' && outfieldCountAfter >= MAX_OUTFIELD) {
+      Alert.alert('Cannot Add Player', `You already have ${MAX_OUTFIELD} field players (maximum allowed).`);
+      return fail('Too many outfield players');
+    }
+
+    // Incoming player inherits the exact slot (isStarter + positionOrder) of the
+    // player they are replacing, so pitch layout is preserved.
+    const incomingPlayer = {
+      ...playerIn,
+      isStarter: outgoingPlayer.isStarter,
+      positionOrder: outgoingPlayer.positionOrder,
+      isCaptain: false,
+    };
+
+    // Determine whether the captain changes
+    const previousCaptainId = captainId;
+    let newCaptainId = captainId;
+    if (captainId === playerOut.id) {
+      // Incoming player takes the same slot — hand them the armband
+      newCaptainId = incomingPlayer.id;
+      incomingPlayer.isCaptain = true;
+    }
+
+    // Atomic swap: replace playerOut with incomingPlayer in one state update
+    setSelectedPlayers((prev) =>
+      prev.map((p) => (p.id === playerOut.id ? incomingPlayer : p))
+    );
+
+    if (newCaptainId !== previousCaptainId) {
+      setCaptainId(newCaptainId);
+    }
+
+    // Run Supabase remove + add in parallel
+    try {
+      const [removeResult, addResult] = await Promise.all([
+        userTeamService.removePlayerFromTeam(userId, playerOut.id),
+        userTeamService.addPlayerToTeam(
+          userId,
+          playerIn.id,
+          incomingPlayer.isStarter,
+          incomingPlayer.positionOrder
+        ),
+      ]);
+
+      if (removeResult.error || addResult.error) {
+        // Revert optimistic state
+        setSelectedPlayers((prev) =>
+          prev.map((p) => (p.id === playerIn.id ? outgoingPlayer : p))
+        );
+        setCaptainId(previousCaptainId);
+        Alert.alert('Transfer Error', 'Failed to complete transfer. Please try again.');
+        return fail(removeResult.error || addResult.error);
+      }
+
+      // Persist captain change to DB if needed
+      if (newCaptainId !== previousCaptainId && newCaptainId) {
+        await userTeamService.updateCaptain(userId, newCaptainId);
+        setSelectedPlayers((prev) =>
+          prev.map((p) => ({ ...p, isCaptain: p.id === newCaptainId }))
+        );
+      }
+    } catch (error) {
+      // Revert optimistic state
+      setSelectedPlayers((prev) =>
+        prev.map((p) => (p.id === playerIn.id ? outgoingPlayer : p))
+      );
+      setCaptainId(previousCaptainId);
+      Alert.alert('Transfer Error', 'Failed to complete transfer. Please try again.');
+      return fail(error);
+    }
+
+    // In unlimited phase no transfer bookkeeping needed
+    if (isUnlimitedPhase) {
+      return { success: true, error: null, usesFreeTransfer: false, pointCost: 0 };
+    }
+
+    // Record the transfer and update local state
+    const transferResult = await transferService.recordTransfer(
+      userId,
+      freeTransfers,
+      pendingDeductions,
+      transfersMadeThisRound,
+      currentRound?.id
+    );
+
+    if (!transferResult.error && transferResult.data) {
+      setFreeTransfers(transferResult.data.free_transfers);
+      setPendingDeductions(transferResult.data.pending_deductions);
+      setTransfersMadeThisRound(transferResult.data.transfers_made_this_round);
+    }
+
+    return {
+      success: true,
+      error: null,
+      usesFreeTransfer: transferResult.usesFreeTransfer ?? true,
+      pointCost: transferResult.pointCost ?? 0,
+    };
+  };
+
+  /**
    * Swap two players' starter/substitute status
    * @param {string} playerId1 - First player ID
    * @param {string} playerId2 - Second player ID
@@ -757,6 +1064,58 @@ export const TeamProvider = ({ children }) => {
   };
 
   /**
+   * Reorder two outfield substitutes by swapping their positionOrder values.
+   * Does not change isStarter status — only affects substitution priority.
+   * @param {string} playerId1 - First outfield sub ID
+   * @param {string} playerId2 - Second outfield sub ID
+   * @returns {Promise<{success: boolean, error: any}>}
+   */
+  const reorderOutfieldSubs = async (playerId1, playerId2) => {
+    const player1 = selectedPlayers.find(p => p.id === playerId1);
+    const player2 = selectedPlayers.find(p => p.id === playerId2);
+
+    if (!player1 || !player2) {
+      return { success: false, error: 'Players not found' };
+    }
+
+    if (player1.isStarter || player2.isStarter ||
+        player1.position !== 'Outfield' || player2.position !== 'Outfield') {
+      return { success: false, error: 'Both players must be outfield substitutes' };
+    }
+
+    try {
+      const previousState = [...selectedPlayers];
+      const order1 = player1.positionOrder;
+      const order2 = player2.positionOrder;
+
+      // Optimistic update: swap their positionOrder values
+      setSelectedPlayers(prev => prev.map(p => {
+        if (p.id === playerId1) return { ...p, positionOrder: order2 };
+        if (p.id === playerId2) return { ...p, positionOrder: order1 };
+        return p;
+      }));
+
+      const [result1, result2] = await Promise.all([
+        userTeamService.updatePlayerPositionOrder(userId, playerId1, order2),
+        userTeamService.updatePlayerPositionOrder(userId, playerId2, order1),
+      ]);
+
+      if (result1.error || result2.error) {
+        setSelectedPlayers(previousState);
+        Alert.alert('Error', 'Failed to reorder substitutes. Please try again.');
+        return { success: false, error: result1.error || result2.error };
+      }
+
+      return { success: true, error: null };
+    } catch (error) {
+      console.error('Error in reorderOutfieldSubs:', error);
+      await loadUserTeam();
+      Alert.alert('Error', 'Failed to reorder substitutes. Please try again.');
+      return { success: false, error };
+    }
+  };
+
+  /**
    * Get validation messages for incomplete team
    * @returns {Array<string>} Array of validation messages
    */
@@ -865,31 +1224,47 @@ export const TeamProvider = ({ children }) => {
   };
 
   /**
-   * Calculate total gameweek points for the team
-   * Includes captain bonus (2x points)
+   * Calculate total gameweek points for the team.
+   *
+   * - If the round is locked (deadline has passed), scores are read from the
+   *   saved user_gw_picks snapshot so that post-deadline transfers never
+   *   affect an already-locked GW score.
+   * - If the round is still open (pre-deadline), scores are calculated from
+   *   the live selectedPlayers so the user can see a live preview.
+   *
    * @param {string} roundId - Round UUID
    * @returns {Promise<number>}
    */
   const calculateGameweekPoints = async (roundId) => {
     if (!roundId) return 0;
-    
+
     try {
+      if (isLocked && userId) {
+        // Round is locked — use the frozen snapshot so transfers can't alter the score
+        return await userGwPicksService.calculateLockedGwScore(
+          userId,
+          roundId,
+          pendingDeductions
+        );
+      }
+
+      // Round still open — live preview from current team
       const starters = selectedPlayers.filter(p => p.isStarter);
       const starterIds = starters.map(p => p.id);
-      
+
       if (starterIds.length === 0) return 0;
-      
+
       const { data: pointsMap } = await playerRoundPointsService
         .getMultiplePlayersPointsForRound(starterIds, roundId);
-      
+
       let total = 0;
       starters.forEach(player => {
         const points = pointsMap[player.id] || 0;
         const multiplier = player.id === captainId ? 2 : 1;
         total += points * multiplier;
       });
-      
-      return total;
+
+      return total - pendingDeductions;
     } catch (error) {
       console.error('Error calculating gameweek points:', error);
       return 0;
@@ -918,6 +1293,17 @@ export const TeamProvider = ({ children }) => {
     outfieldCount,
     totalPoints,
 
+    // Transfer state
+    freeTransfers,
+    transfersMadeThisRound,
+    pendingDeductions,
+    squadFinalized,
+    isUnlimitedPhase,
+
+    // Historical points (locked per-GW snapshots)
+    lockedTotalPoints,
+    loadLockedTotalPoints,
+
     // Validation functions
     canAddPlayer,
     canSetAsStarter,
@@ -928,8 +1314,10 @@ export const TeamProvider = ({ children }) => {
     // Team management functions
     addPlayer,
     removePlayer,
+    makeTransfer,
     setPlayerAsStarter,
     swapPlayers,
+    reorderOutfieldSubs,
     loadUserTeam,
     loadTeamName,
     clearTeam,

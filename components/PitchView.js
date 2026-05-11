@@ -33,7 +33,10 @@ const PitchView = ({
   const starterOutfield = starters.filter(p => p.position === 'Outfield');
   
   const subGK = substitutes.find(p => p.position === 'GK');
-  const subOutfield = substitutes.filter(p => p.position === 'Outfield');
+  // Sort outfield subs by positionOrder so Sub 1 appears first
+  const subOutfield = substitutes
+    .filter(p => p.position === 'Outfield')
+    .sort((a, b) => (a.positionOrder || 0) - (b.positionOrder || 0));
   
   // Create arrays with empty slots for missing players
   const starterOutfieldSlots = [...Array(6)].map((_, i) => starterOutfield[i] || null);
@@ -171,14 +174,20 @@ const PitchView = ({
         <View style={styles.substitutesSection}>
           <View style={styles.benchRow}>
             {/* Sub GK */}
-            <View style={styles.playerSlot}>
-              {renderPlayerOrEmpty(subGK, 'GK', false)}
+            <View style={styles.subSlotWrapper}>
+              <Text style={styles.subGKLabel}>GK</Text>
+              <View style={styles.playerSlot}>
+                {renderPlayerOrEmpty(subGK, 'GK', false)}
+              </View>
             </View>
-            
-            {/* Sub Outfield - 4 players */}
+
+            {/* Sub Outfield - 4 players with priority labels */}
             {subOutfieldSlots.map((player, index) => (
-              <View key={player?.id || `sub-of-${index}`} style={styles.playerSlot}>
-                {renderPlayerOrEmpty(player, 'Outfield', false)}
+              <View key={player?.id || `sub-of-${index}`} style={styles.subSlotWrapper}>
+                <Text style={styles.subPriorityLabel}>{index + 1}</Text>
+                <View style={styles.playerSlot}>
+                  {renderPlayerOrEmpty(player, 'Outfield', false)}
+                </View>
               </View>
             ))}
           </View>
@@ -256,6 +265,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     flexWrap: 'wrap',
     paddingHorizontal: spacing.xs,
+  },
+  subSlotWrapper: {
+    alignItems: 'center',
+  },
+  subPriorityLabel: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: colors.oceanBright,
+    marginBottom: 2,
+    letterSpacing: 0.5,
+  },
+  subGKLabel: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: colors.white + '80',
+    marginBottom: 2,
+    letterSpacing: 0.5,
   },
   compactRow: {
     flexDirection: 'row',

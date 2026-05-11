@@ -19,6 +19,7 @@ import TransfersScreen from './screens/TransfersScreen';
 import FixturesScreen from './screens/FixturesScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import LoadingScreen from './components/LoadingScreen';
+import PlayerDetailScreen from './screens/PlayerDetailScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -177,6 +178,11 @@ function AppContent() {
       <Stack.Screen 
         name="Main" 
         component={MainTabs}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="PlayerDetail"
+        component={PlayerDetailScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

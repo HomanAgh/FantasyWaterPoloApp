@@ -1,14 +1,19 @@
 import supabase from '../config/supabaseClient';
 
 /**
- * Fetch the current active or next upcoming round
+ * Fetch the current active or next upcoming round.
+ * Priority order:
+ *   1. Active round: deadline passed, end_date not yet passed
+ *   2. Next upcoming round: deadline still in the future
+ *   3. Most recently completed round: both deadline and end_date in the past
+ *      (prevents orphaned rounds from disappearing when end_date passes)
  * @returns {Promise<{data: Object|null, error: Error|null}>}
  */
 export const fetchCurrentRound = async () => {
   try {
     const now = new Date().toISOString();
     
-    // Try to get active round (deadline passed, but end_date not passed)
+    // 1. Active round: deadline passed but end_date not yet passed
     let { data, error } = await supabase
       .from('rounds')
       .select('*')
@@ -18,8 +23,10 @@ export const fetchCurrentRound = async () => {
       .limit(1)
       .maybeSingle();
     
-    // If no active round, get next upcoming
-    if (!data && !error) {
+    if (error) throw error;
+
+    // 2. No active round — get next upcoming (deadline in the future)
+    if (!data) {
       ({ data, error } = await supabase
         .from('rounds')
         .select('*')
@@ -27,9 +34,23 @@ export const fetchCurrentRound = async () => {
         .order('round_number', { ascending: true })
         .limit(1)
         .maybeSingle());
+
+      if (error) throw error;
     }
-    
-    if (error) throw error;
+
+    // 3. No upcoming round either — fall back to the most recently completed round
+    //    so the app never loses track of the last played GW
+    if (!data) {
+      ({ data, error } = await supabase
+        .from('rounds')
+        .select('*')
+        .lt('end_date', now)
+        .order('round_number', { ascending: false })
+        .limit(1)
+        .maybeSingle());
+
+      if (error) throw error;
+    }
     
     return { data, error: null };
   } catch (error) {
