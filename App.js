@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from './styles/theme';
 import { RoundProvider } from './context/RoundContext';
 import { TeamProvider, useTeam } from './context/TeamContext';
-import { getUserId } from './utils/userIdHelper';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import * as userProfileService from './services/userProfileService';
 
 // Import screens
@@ -18,16 +18,16 @@ import LeaguesScreen from './screens/LeaguesScreen';
 import TransfersScreen from './screens/TransfersScreen';
 import FixturesScreen from './screens/FixturesScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
+import AuthScreen from './screens/AuthScreen';
 import LoadingScreen from './components/LoadingScreen';
 import PlayerDetailScreen from './screens/PlayerDetailScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Main Tab Navigator
 function MainTabs() {
   const insets = useSafeAreaInsets();
-  
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -52,131 +52,124 @@ function MainTabs() {
           fontWeight: '600',
         },
       }}>
-      <Tab.Screen 
-        name="Home" 
+      <Tab.Screen
+        name="Home"
         component={HomeScreen}
-        options={{ 
+        options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: 24 }}>🏠</Text>
-          ),
+          tabBarIcon: () => <Text style={{ fontSize: 24 }}>🏠</Text>,
         }}
       />
-      <Tab.Screen 
-        name="MyTeam" 
+      <Tab.Screen
+        name="MyTeam"
         component={MyTeamScreen}
-        options={{ 
+        options={{
           title: 'My Team',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: 24 }}>🏊</Text>
-          ),
+          tabBarIcon: () => <Text style={{ fontSize: 24 }}>🏊</Text>,
         }}
       />
-      <Tab.Screen 
-        name="Players" 
+      <Tab.Screen
+        name="Players"
         component={PlayersScreen}
-        options={{ 
+        options={{
           title: 'Players',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: 24 }}>👥</Text>
-          ),
+          tabBarIcon: () => <Text style={{ fontSize: 24 }}>👥</Text>,
         }}
       />
-      <Tab.Screen 
-        name="Transfers" 
+      <Tab.Screen
+        name="Transfers"
         component={TransfersScreen}
-        options={{ 
+        options={{
           title: 'Transfers',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: 24 }}>🔄</Text>
-          ),
+          tabBarIcon: () => <Text style={{ fontSize: 24 }}>🔄</Text>,
         }}
       />
-      <Tab.Screen 
-        name="Fixtures" 
+      <Tab.Screen
+        name="Fixtures"
         component={FixturesScreen}
-        options={{ 
+        options={{
           title: 'Fixtures',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: 24 }}>📅</Text>
-          ),
+          tabBarIcon: () => <Text style={{ fontSize: 24 }}>📅</Text>,
         }}
       />
-      <Tab.Screen 
-        name="Leagues" 
+      <Tab.Screen
+        name="Leagues"
         component={LeaguesScreen}
-        options={{ 
+        options={{
           title: 'Leagues',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: 24 }}>🏆</Text>
-          ),
+          tabBarIcon: () => <Text style={{ fontSize: 24 }}>🏆</Text>,
         }}
       />
     </Tab.Navigator>
   );
 }
 
-// App Content (with onboarding check)
 function AppContent() {
-  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
-  const [userId, setUserId] = useState(null);
+  const { userId, isLoadingAuth } = useAuth();
   const { loadTeamName } = useTeam();
 
+  // null = not checked yet, true = needs onboarding, false = has profile
+  const [needsOnboarding, setNeedsOnboarding] = useState(null);
+
   useEffect(() => {
-    checkOnboardingStatus();
-  }, []);
+    if (!userId) {
+      // User signed out or not logged in — reset onboarding state
+      setNeedsOnboarding(null);
+      return;
+    }
+    checkProfile(userId);
+  }, [userId]);
 
-  const checkOnboardingStatus = async () => {
+  const checkProfile = async (id) => {
     try {
-      const id = await getUserId();
-      console.log('[checkOnboardingStatus] Got userId:', id);
-      setUserId(id);
-
-      // Check if user profile exists
       const profileExists = await userProfileService.checkIfProfileExists(id);
-      console.log('[checkOnboardingStatus] Profile exists:', profileExists);
-      
       if (profileExists) {
-        // Load team name if profile exists
         await loadTeamName(id);
-        console.log('[checkOnboardingStatus] Team name loaded');
       }
-
       setNeedsOnboarding(!profileExists);
     } catch (error) {
-      console.error('[checkOnboardingStatus] Error:', error);
-      // If error, assume onboarding is needed
+      console.error('[AppContent] Error checking profile:', error);
       setNeedsOnboarding(true);
-    } finally {
-      setIsCheckingOnboarding(false);
     }
   };
 
-  const handleOnboardingComplete = async (teamName) => {
-    // Load the team name into context
-    await loadTeamName(userId);
-    // Hide onboarding screen
+  const handleOnboardingComplete = async () => {
+    if (userId) {
+      await loadTeamName(userId);
+    }
     setNeedsOnboarding(false);
   };
 
-  if (isCheckingOnboarding) {
+  // Still resolving the stored session
+  if (isLoadingAuth) {
     return <LoadingScreen />;
   }
 
+  // Not logged in — show auth screen
+  if (!userId) {
+    return <AuthScreen />;
+  }
+
+  // Logged in but haven't checked profile yet
+  if (needsOnboarding === null) {
+    return <LoadingScreen />;
+  }
+
+  // Logged in, new user — collect team name
   if (needsOnboarding) {
     return (
-      <OnboardingScreen 
-        userId={userId} 
-        onComplete={handleOnboardingComplete} 
+      <OnboardingScreen
+        userId={userId}
+        onComplete={handleOnboardingComplete}
       />
     );
   }
 
+  // Logged in, profile exists — main app
   return (
     <Stack.Navigator>
-      <Stack.Screen 
-        name="Main" 
+      <Stack.Screen
+        name="Main"
         component={MainTabs}
         options={{ headerShown: false }}
       />
@@ -189,16 +182,17 @@ function AppContent() {
   );
 }
 
-// Root App Component
 export default function App() {
   return (
-    <RoundProvider>
-      <TeamProvider>
-        <NavigationContainer>
-          <StatusBar barStyle="dark-content" />
-          <AppContent />
-        </NavigationContainer>
-      </TeamProvider>
-    </RoundProvider>
+    <AuthProvider>
+      <RoundProvider>
+        <TeamProvider>
+          <NavigationContainer>
+            <StatusBar barStyle="dark-content" />
+            <AppContent />
+          </NavigationContainer>
+        </TeamProvider>
+      </RoundProvider>
+    </AuthProvider>
   );
 }

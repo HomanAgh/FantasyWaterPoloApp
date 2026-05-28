@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Alert } from 'react-native';
-import { getUserId } from '../utils/userIdHelper';
 import supabase from '../config/supabaseClient';
+import { useAuth } from './AuthContext';
 import * as userTeamService from '../services/userTeamService';
 import * as playerRoundPointsService from '../services/playerRoundPointsService';
 import * as userProfileService from '../services/userProfileService';
@@ -59,18 +59,35 @@ export const TeamProvider = ({ children }) => {
   // Round context — TeamProvider is always rendered inside RoundProvider
   const { currentRound, isLocked } = useRound();
 
-  // Initialize user ID and load team on mount
+  // Auth context — userId comes from Supabase Auth session
+  const { userId: authUserId } = useAuth();
+
+  // Re-initialize team whenever the logged-in user changes (login / logout)
   useEffect(() => {
-    initializeTeam();
-  }, []);
+    if (authUserId) {
+      initializeTeam(authUserId);
+    } else {
+      // User signed out — clear all team state
+      setUserId(null);
+      setSelectedPlayers([]);
+      setCaptainId(null);
+      setTeamName('My Team');
+      setFreeTransfers(1);
+      setLastTransferRoundId(null);
+      setTransfersMadeThisRound(0);
+      setSquadFinalized(false);
+      setPendingDeductions(0);
+      setLockedTotalPoints(0);
+      setIsLoading(false);
+    }
+  }, [authUserId]);
 
   /**
-   * Initialize user ID and load their team + transfer state
+   * Initialize team data for the given authenticated user
    */
-  const initializeTeam = async () => {
+  const initializeTeam = async (id) => {
     try {
       setIsLoading(true);
-      const id = await getUserId();
       setUserId(id);
       await loadUserTeam(id);
       await loadTransferState(id);

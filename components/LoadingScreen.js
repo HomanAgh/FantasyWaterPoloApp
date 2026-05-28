@@ -8,7 +8,7 @@ import { colors } from '../styles/theme';
 const LoadingScreen = () => {
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color={colors.primary} />
+      <ActivityIndicator size="large" color={colors.oceanMedium} />
     </View>
   );
 };
@@ -18,7 +18,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.backgroundLight,
   },
 });
 
