@@ -124,16 +124,50 @@ WHERE id = 'fixture-uuid';
 #### Add Player Match Stats
 
 ```sql
-INSERT INTO player_match_stats 
-  (fixture_id, player_id, goals, assists, saves, minutes_played, points_earned)
-VALUES 
-  ('fixture-uuid', 'player-uuid', 2, 1, 0, 32, 11);
+INSERT INTO player_match_stats
+  (fixture_id, player_id, goals, assists, saves, penalty_saves,
+   minutes_played, appeared, yellow_cards, red_cards, clean_sheets, blocks, sprints)
+VALUES
+  ('fixture-uuid', 'player-uuid', 2, 1, 0, 0, 32, true, 0, 0, 0, 0, 0)
+ON CONFLICT (fixture_id, player_id)
+DO UPDATE SET
+  goals          = EXCLUDED.goals,
+  assists        = EXCLUDED.assists,
+  saves          = EXCLUDED.saves,
+  penalty_saves  = EXCLUDED.penalty_saves,
+  minutes_played = EXCLUDED.minutes_played,
+  appeared       = EXCLUDED.appeared,
+  yellow_cards   = EXCLUDED.yellow_cards,
+  red_cards      = EXCLUDED.red_cards,
+  clean_sheets   = EXCLUDED.clean_sheets,
+  blocks         = EXCLUDED.blocks,
+  sprints        = EXCLUDED.sprints;
 ```
 
+**Important**: Do NOT include `points_earned` in the insert — the database trigger calculates it automatically based on the scoring rules below.
+
+**Re-running the query is safe**: the `ON CONFLICT` clause means running it again with updated values will overwrite the previous entry for that player/fixture combination.
+
+#### Scoring Rules (as of migration 009)
+
+| Stat | Points |
+|------|--------|
+| Goal | +4 pts each |
+| Assist | +3 pts each |
+| Save | +1 pt per 2 saves (floor) |
+| Penalty save | +3 pts each |
+| Appearance (`appeared = true`) | +1 pt |
+| Block | +2 pts each |
+| Sprint | +2 pts each |
+| Clean sheet period — GK | +5 pts per period |
+| Clean sheet period — Outfield | +1 pt per period |
+| Yellow card | no points effect (tracked for records only) |
+| Red card | -10 pts each |
+
 **Tips**:
-- Add stats for the top 3-5 performers from each match
-- Points are stored in `points_earned` - calculate based on your scoring system
-- The app will automatically show the top 3 performers sorted by points
+- `clean_sheets` is an integer representing how many periods had no goals conceded (0–4)
+- `appeared` should be `true` if the player played any minutes, `false` if they did not play
+- Add stats for all players who appeared — the app shows the top 3 performers sorted by points automatically
 
 ## Database Schema Reference
 
@@ -160,11 +194,16 @@ VALUES
 | player_id | UUID | Reference to players table |
 | goals | INTEGER | Goals scored |
 | assists | INTEGER | Assists made |
-| saves | INTEGER | Saves (for goalkeepers) |
+| saves | INTEGER | Saves made |
+| penalty_saves | INTEGER | Penalty saves made |
 | minutes_played | INTEGER | Minutes played |
-| yellow_cards | INTEGER | Yellow cards received |
+| appeared | BOOLEAN | Whether the player played at all |
+| blocks | INTEGER | Blocks made |
+| sprints | INTEGER | Sprints made |
+| clean_sheets | INTEGER | Number of periods with no goals conceded (0–4) |
+| yellow_cards | INTEGER | Yellow cards received (tracked, not scored) |
 | red_cards | INTEGER | Red cards received |
-| points_earned | INTEGER | Fantasy points earned |
+| points_earned | INTEGER | Auto-calculated by DB trigger — do not set manually |
 
 ## Troubleshooting
 

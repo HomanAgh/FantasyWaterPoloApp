@@ -193,7 +193,7 @@ export const fetchPlayerDetail = async (playerId) => {
       .from('player_match_stats')
       .select(`
         goals, assists, saves, minutes_played, points_earned,
-        yellow_cards, red_cards, clean_sheet,
+        yellow_cards, red_cards, clean_sheets, blocks, sprints,
         fixtures (
           id, match_date, status, home_score, away_score,
           home_team:home_team_id (id, name),
@@ -214,7 +214,9 @@ export const fetchPlayerDetail = async (playerId) => {
     const totalMinutes = stats.reduce((s, r) => s + (r.minutes_played || 0), 0);
     const totalYellows = stats.reduce((s, r) => s + (r.yellow_cards || 0), 0);
     const totalReds = stats.reduce((s, r) => s + (r.red_cards || 0), 0);
-    const totalCleanSheets = stats.reduce((s, r) => s + (r.clean_sheet ? 1 : 0), 0);
+    const totalCleanSheets = stats.reduce((s, r) => s + (r.clean_sheets || 0), 0);
+    const totalBlocks = stats.reduce((s, r) => s + (r.blocks || 0), 0);
+    const totalSprints = stats.reduce((s, r) => s + (r.sprints || 0), 0);
     const pointsPerGame = gamesPlayed > 0
       ? (playerRow.points_total / gamesPlayed).toFixed(1)
       : '0.0';
@@ -227,7 +229,9 @@ export const fetchPlayerDetail = async (playerId) => {
       minutesPlayed: r.minutes_played,
       yellowCards: r.yellow_cards || 0,
       redCards: r.red_cards || 0,
-      cleanSheet: r.clean_sheet || false,
+      cleanSheets: r.clean_sheets || 0,
+      blocks: r.blocks || 0,
+      sprints: r.sprints || 0,
       pointsEarned: r.points_earned,
       fixture: r.fixtures,
     }));
@@ -264,6 +268,8 @@ export const fetchPlayerDetail = async (playerId) => {
         totalYellows,
         totalReds,
         totalCleanSheets,
+        totalBlocks,
+        totalSprints,
         pointsPerGame,
         recentMatches,
         formHistory,
@@ -330,6 +336,61 @@ export const searchAndFilterPlayers = async (query, position, teamId = null) => 
     return { data: transformedData, error: null };
   } catch (error) {
     console.error('Error searching and filtering players:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Search and filter players with aggregated season stats.
+ * Reads from the player_season_stats view (migration 010).
+ * Returns the same shape as searchAndFilterPlayers plus individual stat totals.
+ * @param {string} query
+ * @param {string} position - 'All' | 'Goalkeeper' | 'Field Player'
+ * @param {string} teamId   - team UUID or 'all'
+ * @returns {Promise<{data: Array, error: Error|null}>}
+ */
+export const searchAndFilterPlayersWithStats = async (query, position, teamId = null) => {
+  try {
+    let q = supabase.from('player_season_stats').select('*');
+
+    if (query && query.trim() !== '') {
+      q = q.ilike('name', `%${query}%`);
+    }
+
+    if (position !== 'All') {
+      q = q.eq('position', position === 'Goalkeeper' ? 'GK' : 'Outfield');
+    }
+
+    if (teamId && teamId !== 'all') {
+      q = q.eq('team_id', teamId);
+    }
+
+    const { data, error } = await q.order('name', { ascending: true });
+    if (error) throw error;
+
+    const transformed = (data || []).map(p => ({
+      id: p.id,
+      name: p.name,
+      position: p.position,
+      team: p.team_name || 'Unknown',
+      teamId: p.team_id,
+      price: parseFloat(p.price),
+      points: p.points_total || 0,
+      gamesPlayed: Number(p.games_played) || 0,
+      goals: Number(p.total_goals) || 0,
+      assists: Number(p.total_assists) || 0,
+      saves: Number(p.total_saves) || 0,
+      penaltySaves: Number(p.total_penalty_saves) || 0,
+      blocks: Number(p.total_blocks) || 0,
+      sprints: Number(p.total_sprints) || 0,
+      cleanSheets: Number(p.total_clean_sheets) || 0,
+      yellows: Number(p.total_yellows) || 0,
+      reds: Number(p.total_reds) || 0,
+    }));
+
+    return { data: transformed, error: null };
+  } catch (error) {
+    console.error('Error fetching players with stats:', error);
     return { data: null, error };
   }
 };

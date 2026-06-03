@@ -140,19 +140,22 @@ export default function PlayerDetailScreen({ route, navigation }) {
               {isGK ? (
                 <>
                   <StatCell label="Saves" value={detail.totalSaves} emoji="🧤" />
-                  <StatCell label="Clean Sheets" value={detail.totalCleanSheets} emoji="🧱" highlight={detail.totalCleanSheets > 0} />
+                  <StatCell label="Clean Sheet Periods" value={detail.totalCleanSheets} emoji="🧱" highlight={detail.totalCleanSheets > 0} />
+                  <StatCell label="Blocks" value={detail.totalBlocks} emoji="✋" highlight={detail.totalBlocks > 0} />
+                  <StatCell label="Sprints" value={detail.totalSprints} emoji="⚡" highlight={detail.totalSprints > 0} />
                   <StatCell label="Games" value={detail.gamesPlayed} emoji="🏊" />
                   <StatCell label="Minutes" value={detail.totalMinutes} emoji="⏱️" />
-                  <StatCell label="Yellow Cards" value={detail.totalYellows} emoji="🟨" accent={detail.totalYellows > 0} />
                   <StatCell label="Red Cards" value={detail.totalReds} emoji="🟥" danger={detail.totalReds > 0} />
                 </>
               ) : (
                 <>
                   <StatCell label="Goals" value={detail.totalGoals} emoji="🎯" />
                   <StatCell label="Assists" value={detail.totalAssists} emoji="🤝" />
-                  <StatCell label="Clean Sheets" value={detail.totalCleanSheets} emoji="🧱" highlight={detail.totalCleanSheets > 0} />
+                  <StatCell label="Blocks" value={detail.totalBlocks} emoji="✋" highlight={detail.totalBlocks > 0} />
+                  <StatCell label="Sprints" value={detail.totalSprints} emoji="⚡" highlight={detail.totalSprints > 0} />
+                  <StatCell label="Clean Sheet Periods" value={detail.totalCleanSheets} emoji="🧱" highlight={detail.totalCleanSheets > 0} />
                   <StatCell label="Games" value={detail.gamesPlayed} emoji="🏊" />
-                  <StatCell label="Yellow Cards" value={detail.totalYellows} emoji="🟨" accent={detail.totalYellows > 0} />
+                  <StatCell label="Minutes" value={detail.totalMinutes} emoji="⏱️" />
                   <StatCell label="Red Cards" value={detail.totalReds} emoji="🟥" danger={detail.totalReds > 0} />
                 </>
               )}
@@ -204,8 +207,10 @@ export default function PlayerDetailScreen({ route, navigation }) {
                           {match.assists > 0 && <MatchStat label="Ast" value={match.assists} />}
                         </>
                       )}
-                      {match.cleanSheet && (
-                        <Text style={styles.cardIcon}>🧱</Text>
+                      {match.blocks > 0 && <MatchStat label="Blk" value={match.blocks} />}
+                      {match.sprints > 0 && <MatchStat label="Spr" value={match.sprints} />}
+                      {match.cleanSheets > 0 && (
+                        <Text style={styles.cardIcon}>🧱×{match.cleanSheets}</Text>
                       )}
                       {match.yellowCards > 0 && (
                         <Text style={styles.cardIcon}>🟨</Text>

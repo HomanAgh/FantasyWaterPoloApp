@@ -182,17 +182,14 @@ export const formatPlayerStats = (stats) => {
   if (!stats) return '';
   
   const parts = [];
-  
-  if (stats.goals > 0) {
-    parts.push(`${stats.goals}G`);
-  }
-  if (stats.assists > 0) {
-    parts.push(`${stats.assists}A`);
-  }
-  if (stats.saves > 0) {
-    parts.push(`${stats.saves} saves`);
-  }
-  
+
+  if (stats.goals > 0) parts.push(`${stats.goals}G`);
+  if (stats.assists > 0) parts.push(`${stats.assists}A`);
+  if (stats.saves > 0) parts.push(`${stats.saves} saves`);
+  if (stats.blocks > 0) parts.push(`${stats.blocks} blk`);
+  if (stats.sprints > 0) parts.push(`${stats.sprints} spr`);
+  if (stats.clean_sheets > 0) parts.push(`${stats.clean_sheets} CS`);
+
   return parts.join(', ') || 'No stats';
 };
 

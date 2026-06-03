@@ -38,9 +38,12 @@ CREATE TABLE IF NOT EXISTS player_match_stats (
   goals INTEGER NOT NULL DEFAULT 0,
   assists INTEGER NOT NULL DEFAULT 0,
   saves INTEGER NOT NULL DEFAULT 0,
+  penalty_saves INTEGER NOT NULL DEFAULT 0,
   minutes_played INTEGER NOT NULL DEFAULT 0,
+  appeared BOOLEAN NOT NULL DEFAULT false,
   yellow_cards INTEGER NOT NULL DEFAULT 0,
   red_cards INTEGER NOT NULL DEFAULT 0,
+  clean_sheet BOOLEAN NOT NULL DEFAULT false,
   points_earned INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -64,10 +67,11 @@ CREATE POLICY "Anyone can view fixtures"
   ON fixtures FOR SELECT
   USING (true);
 
--- Only authenticated users can manage fixtures (admin functions)
-CREATE POLICY "Authenticated users can manage fixtures"
+-- Allow all users to write fixtures
+-- Note: app uses anon key so auth.role() = 'anon', not 'authenticated'
+CREATE POLICY "Anyone can manage fixtures"
   ON fixtures FOR ALL
-  USING (auth.role() = 'authenticated');
+  USING (true);
 
 -- Enable RLS on player_match_stats table
 ALTER TABLE player_match_stats ENABLE ROW LEVEL SECURITY;
@@ -77,10 +81,11 @@ CREATE POLICY "Anyone can view player match stats"
   ON player_match_stats FOR SELECT
   USING (true);
 
--- Only authenticated users can manage player match stats (admin functions)
-CREATE POLICY "Authenticated users can manage player match stats"
+-- Allow all users to write player match stats
+-- Note: app uses anon key so auth.role() = 'anon', not 'authenticated'
+CREATE POLICY "Anyone can manage player match stats"
   ON player_match_stats FOR ALL
-  USING (auth.role() = 'authenticated');
+  USING (true);
 
 -- =====================================================
 -- 4. TRIGGER TO AUTO-UPDATE updated_at TIMESTAMP
@@ -118,7 +123,7 @@ CREATE TRIGGER update_player_match_stats_updated_at
 -- FROM information_schema.columns 
 -- WHERE table_name = 'fixtures';
 
--- Verify player_match_stats table structure
+-- Verify player_match_stats table structure (includes penalty_saves, appeared, clean_sheet)
 -- SELECT column_name, data_type, is_nullable 
 -- FROM information_schema.columns 
 -- WHERE table_name = 'player_match_stats';

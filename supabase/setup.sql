@@ -96,14 +96,15 @@ CREATE POLICY "Allow public read access on teams" ON teams FOR SELECT USING (tru
 CREATE POLICY "Allow public read access on players" ON players FOR SELECT USING (true);
 CREATE POLICY "Allow public read access on rounds" ON rounds FOR SELECT USING (true);
 
--- Allow public access to user_teams (for development)
--- In production, add user_id checks: USING (auth.uid()::text = user_id)
+-- Base open policies for initial setup only.
+-- These are superseded by migrations/008_auth_rls_update.sql which enforces
+-- auth.uid()::text = user_id on all write operations.
 CREATE POLICY "Allow public insert on user_teams" ON user_teams FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update on user_teams" ON user_teams FOR UPDATE USING (true);
 CREATE POLICY "Allow public delete on user_teams" ON user_teams FOR DELETE USING (true);
 CREATE POLICY "Allow public select on user_teams" ON user_teams FOR SELECT USING (true);
 
--- Allow public access to transfers (for development)
+-- Base open policies for initial setup only (superseded by migration 008).
 CREATE POLICY "Allow public insert on transfers" ON transfers FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public select on transfers" ON transfers FOR SELECT USING (true);
 
@@ -148,5 +149,5 @@ ON CONFLICT DO NOTHING;
 -- Next steps:
 -- 1. Go to "Table Editor" in Supabase to verify tables were created
 -- 2. Add your own teams and players data
--- 3. Configure your app with Supabase credentials (see SUPABASE_SETUP.md)
+-- 3. Configure your app with Supabase credentials in config/supabaseClient.js
 -- ============================================

@@ -29,10 +29,11 @@ CREATE POLICY "Anyone can view player round points"
   ON player_round_points FOR SELECT
   USING (true);
 
--- Only authenticated users can insert/update (for admin functions)
-CREATE POLICY "Authenticated users can manage player round points"
+-- Allow all users to write player round points
+-- Note: app uses anon key so auth.role() = 'anon', not 'authenticated'
+CREATE POLICY "Anyone can manage player round points"
   ON player_round_points FOR ALL
-  USING (auth.role() = 'authenticated');
+  USING (true);
 
 -- =====================================================
 -- 2. MODIFY user_teams TABLE

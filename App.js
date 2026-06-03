@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar, Text } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from './styles/theme';
 import { RoundProvider } from './context/RoundContext';
 import { TeamProvider, useTeam } from './context/TeamContext';
@@ -184,15 +184,17 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <RoundProvider>
-        <TeamProvider>
-          <NavigationContainer>
-            <StatusBar barStyle="dark-content" />
-            <AppContent />
-          </NavigationContainer>
-        </TeamProvider>
-      </RoundProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <RoundProvider>
+          <TeamProvider>
+            <NavigationContainer theme={DefaultTheme}>
+              <StatusBar barStyle="dark-content" />
+              <AppContent />
+            </NavigationContainer>
+          </TeamProvider>
+        </RoundProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
