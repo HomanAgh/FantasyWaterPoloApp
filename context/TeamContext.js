@@ -253,10 +253,11 @@ export const TeamProvider = ({ children }) => {
       const dbLastTransferRoundId = freshState.lastTransferRoundId ?? null;
 
       if (!dbSquadFinalized) {
-        // GW1 deadline passed OR app opened past GW1 for the first time
-        const shouldFinalize =
-          (currentRound.round_number === 1 && isLocked) ||
-          currentRound.round_number > 1;
+        // Finalize once the first GW the user participates in has locked.
+        // Requiring isLocked for all cases ensures late joiners keep their
+        // unlimited squad-building phase until their first deadline passes —
+        // not immediately on first app open.
+        const shouldFinalize = isLocked;
 
         if (shouldFinalize) {
           // Guard: only finalize if the user has actually completed registration

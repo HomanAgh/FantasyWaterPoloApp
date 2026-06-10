@@ -143,27 +143,6 @@ export default function TransfersScreen({ navigation }) {
     return 'Squad complete';
   };
 
-  /**
-   * Auto-pick best value players to fill empty slots
-   */
-  const handleAutoPick = () => {
-    Alert.alert(
-      'Auto-Pick Team',
-      'This feature will automatically fill empty slots with the best value players within your budget.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Coming Soon',
-          onPress: () => {
-            Alert.alert('Coming Soon', 'Auto-pick feature will be available in a future update.');
-          },
-        },
-      ]
-    );
-  };
 
   return (
     <View style={styles.container}>
@@ -285,40 +264,6 @@ export default function TransfersScreen({ navigation }) {
             isLocked={isLocked}
           />
 
-          {/* Action Buttons */}
-          {!isLocked && (
-            <View style={styles.actionsCard}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => navigation.navigate('Players')}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.actionButtonIcon}>➕</Text>
-                <View style={styles.actionButtonContent}>
-                  <Text style={styles.actionButtonText}>Add Players</Text>
-                  <Text style={styles.actionButtonSubtext}>
-                    Browse all available players
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              {selectedPlayers.length < 12 && (
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.actionButtonSecondary]}
-                  onPress={handleAutoPick}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.actionButtonIcon}>✨</Text>
-                  <View style={styles.actionButtonContent}>
-                    <Text style={styles.actionButtonText}>Auto-Pick</Text>
-                    <Text style={styles.actionButtonSubtext}>
-                      Fill empty slots automatically
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
         </>
       ) : (
         <ScrollView style={styles.emptyContainer} contentContainerStyle={styles.emptyContent}>
@@ -429,20 +374,23 @@ export default function TransfersScreen({ navigation }) {
                     </View>
                   </TouchableOpacity>
 
-                  {/* Remove Player */}
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.modalButtonDanger]}
-                    onPress={handleRemovePlayer}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.modalButtonIcon}>🗑️</Text>
-                    <View style={styles.modalButtonTextContainer}>
-                      <Text style={styles.modalButtonTextDanger}>Remove from Team</Text>
-                      <Text style={styles.modalButtonSubtextDanger}>
-                        Free up ${selectedPlayer.price.toFixed(1)}M
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
+                  {/* Remove Player — only allowed during unlimited squad-building phase.
+                      Post-GW1 removals must go through Replace to enforce transfer costs. */}
+                  {isUnlimitedPhase && (
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.modalButtonDanger]}
+                      onPress={handleRemovePlayer}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.modalButtonIcon}>🗑️</Text>
+                      <View style={styles.modalButtonTextContainer}>
+                        <Text style={styles.modalButtonTextDanger}>Remove from Team</Text>
+                        <Text style={styles.modalButtonSubtextDanger}>
+                          Free up ${selectedPlayer.price.toFixed(1)}M
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
 
                   {/* Cancel Button */}
                   <TouchableOpacity
@@ -662,7 +610,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   emptyContent: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,

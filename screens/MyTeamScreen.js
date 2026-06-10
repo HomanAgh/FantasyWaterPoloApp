@@ -96,20 +96,7 @@ export default function MyTeamScreen({ navigation }) {
    * Handle empty slot press
    */
   const handleEmptySlotPress = (position, isStarter) => {
-    Alert.alert(
-      'Add Players',
-      'Go to the Players tab to add more players to your team.',
-      [
-        {
-          text: 'Go to Players',
-          onPress: () => navigation.navigate('Players'),
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-      ]
-    );
+    navigation.navigate('Transfers');
   };
 
   /**
@@ -478,29 +465,6 @@ export default function MyTeamScreen({ navigation }) {
         </TouchableOpacity>
       </Modal>
 
-      {/* Quick Actions Bar at Bottom */}
-      {selectedPlayers.length > 0 && (
-        <View style={styles.bottomBar}>
-          <TouchableOpacity
-            style={[styles.bottomButton, isLocked && styles.bottomButtonDisabled]}
-            onPress={() => navigation.navigate('Players')}
-            disabled={isLocked}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.bottomButtonIcon}>➕</Text>
-            <Text style={styles.bottomButtonText}>Add Players</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.bottomButton, styles.bottomButtonSecondary, isLocked && styles.bottomButtonDisabled]}
-            onPress={() => navigation.navigate('Transfers')}
-            disabled={isLocked}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.bottomButtonIcon}>🔄</Text>
-            <Text style={styles.bottomButtonText}>Transfers</Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 }

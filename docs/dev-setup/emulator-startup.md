@@ -2,32 +2,34 @@
 
 ## Normal Daily Startup
 
-Use this every time you sit down to develop.
+**Run the startup script. That's it.**
 
-**1. Start the emulator**
+Open PowerShell in the project folder and run:
+```
+.\start-dev.ps1
+```
+
+Or right-click `start-dev.ps1` in File Explorer → **Run with PowerShell**.
+
+The script will:
+1. Wait until the emulator is fully booted (start it in Android Studio first if needed)
+2. Set up the adb tunnel automatically
+3. Start Metro
+
+Once Metro says `Dev server ready`, open the app drawer on the emulator (swipe up) and tap **FantasyWaterPoloApp**.
+
+---
+
+## Starting the Emulator
+
+If the emulator isn't running yet:
 - Open Android Studio
 - Open Device Manager (phone icon on the right side panel)
-- Click ▶ next to **Medium Phone** to start it
+- Click ▶ next to **Medium Phone**
 - Wait until the Android home screen is fully visible
+- Then run `.\start-dev.ps1`
 
-**2. Open PowerShell and run:**
-```
-cd C:\Users\zorro\FantasyWaterPoloApp
-adb reverse tcp:8081 tcp:8081
-npm start
-```
-`adb reverse` should print `8081`. If it says "no devices found", the emulator hasn't finished booting — wait a few seconds and try again.
-
-**3. Wait for Metro to say:**
-```
-Dev server ready.
-```
-
-**4. On the emulator screen:**
-- Swipe up from the bottom to open the app drawer
-- Find and tap **FantasyWaterPoloApp**
-
-The app will load. You're ready to develop.
+The script will detect the emulator is already booted and skip straight to starting Metro.
 
 ---
 
@@ -39,14 +41,7 @@ The app will load. You're ready to develop.
 | Open the Dev Menu | Press `d` in the Metro terminal |
 | Stop Metro | Press `Ctrl+C` in the Metro terminal |
 
----
-
-## Do I Need `adb reverse` Every Time?
-
-- **Yes, if you fully closed the emulator** since your last session — run it before `npm start`
-- **No, if the emulator was just sleeping/minimised** — you can skip it and go straight to `npm start`
-
-If the app fails to load or Metro shows "Cannot connect", just run `adb reverse tcp:8081 tcp:8081` and press `r` to reload.
+> **Note:** Fast Refresh (auto hot-reload on file save) is disabled in this project to prevent black screen crashes. Press `r` in Metro to reload after making changes.
 
 ---
 
@@ -66,10 +61,10 @@ For all normal JavaScript/React code changes, **do not use the Run button** — 
 
 | Problem | Fix |
 |---------|-----|
-| "Cannot connect to Metro" | Run `adb reverse tcp:8081 tcp:8081` then press `r` |
-| App shows old code | Press `r` in Metro terminal |
-| Black screen | See `docs/troubleshooting/black-screen-fix.md` |
-| "No devices found" on `adb reverse` | Emulator hasn't finished booting — wait and retry |
+| Script says "Emulator not ready" | Start the emulator in Android Studio first, wait for home screen, re-run script |
+| App shows splash screen but never loads | Run `adb reverse tcp:8081 tcp:8081` then close and reopen the app |
+| Black screen | Run: `adb shell am force-stop com.fantasywaterpoloapp` then `adb shell monkey -p com.fantasywaterpoloapp 1` |
+| "No devices found" | Emulator hasn't finished booting — the script handles this automatically |
 | Metro cache seems broken | Stop Metro, run `npx react-native start --reset-cache` |
 
 ---
@@ -79,8 +74,7 @@ For all normal JavaScript/React code changes, **do not use the Run button** — 
 If the emulator data was wiped or the app is not installed:
 
 ```
-adb reverse tcp:8081 tcp:8081
-npm start
+.\start-dev.ps1
 ```
 Leave Metro running, then in a **second PowerShell terminal**:
 ```

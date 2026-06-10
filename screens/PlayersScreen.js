@@ -92,6 +92,7 @@ export default function PlayersScreen({ navigation, route }) {
     freeTransfers,
     pendingDeductions,
     isUnlimitedPhase,
+    squadFinalized,
   } = useTeam();
 
   // Get round info from context
@@ -101,6 +102,10 @@ export default function PlayersScreen({ navigation, route }) {
   const effectiveBudget = (mode === 'replace' && replacingPlayer)
     ? remainingBudget + replacingPlayer.price
     : remainingBudget;
+
+  // Post-GW1, a full squad cannot use addPlayer / removePlayer directly —
+  // all changes must go through the Transfers → replace flow.
+  const isSquadFull = selectedPlayers.length >= 12;
 
   // Load teams on mount
   useEffect(() => {
@@ -599,6 +604,10 @@ export default function PlayersScreen({ navigation, route }) {
                     ? { canAdd: !isInTeam && effectiveBudget >= player.price }
                     : canAddPlayer(player);
 
+                  // Post-finalization, a full-squad add must go through Transfers.
+                  // This prevents the free remove→add bypass of transfer cost rules.
+                  const redirectToTransfers = squadFinalized && isSquadFull && mode !== 'replace';
+
                   return (
                     <View
                       key={player.id}
@@ -610,20 +619,37 @@ export default function PlayersScreen({ navigation, route }) {
                       ]}>
                       {isInTeam ? (
                         <TouchableOpacity
-                          style={[styles.pcBtnIn, isLocked && styles.pcBtnDisabled]}
-                          onPress={() => handleRemovePlayer(player.id)}
+                          style={[styles.pcBtnIn, (isLocked || squadFinalized) && styles.pcBtnDisabled]}
+                          onPress={() => {
+                            if (squadFinalized) {
+                              Alert.alert(
+                                'Use the Transfers Screen',
+                                'To swap this player out, go to the Transfers screen and tap them on the pitch to pick a replacement.'
+                              );
+                              return;
+                            }
+                            handleRemovePlayer(player.id);
+                          }}
                           disabled={isLocked}
                           activeOpacity={0.7}>
-                          <Text style={[styles.pcBtnInText, isLocked && styles.pcBtnDisabledText]}>✓</Text>
+                          <Text style={[styles.pcBtnInText, (isLocked || squadFinalized) && styles.pcBtnDisabledText]}>
+                            {isLocked ? '🔒' : squadFinalized ? '⇄' : '✓'}
+                          </Text>
                         </TouchableOpacity>
                       ) : (
                         <TouchableOpacity
                           style={[styles.pcBtnAdd, (!canAdd || isLocked) && styles.pcBtnDisabled]}
-                          onPress={() => handleAddPlayer(player)}
+                          onPress={() => {
+                            if (redirectToTransfers) {
+                              navigation.navigate('Transfers');
+                              return;
+                            }
+                            handleAddPlayer(player);
+                          }}
                           disabled={!canAdd || isLocked}
                           activeOpacity={0.7}>
                           <Text style={[styles.pcBtnAddText, (!canAdd || isLocked) && styles.pcBtnDisabledText]}>
-                            {isLocked ? '🔒' : mode === 'replace' ? '⇄' : '+'}
+                            {isLocked ? '🔒' : (redirectToTransfers || mode === 'replace') ? '⇄' : '+'}
                           </Text>
                         </TouchableOpacity>
                       )}

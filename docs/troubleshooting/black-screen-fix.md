@@ -1,24 +1,18 @@
-# Black Screen Fix — Android Emulator
+# Black Screen Fix — Android / Physical Device
 
 ## Symptom
 
-The app launches, the native splash screen shows, then the screen goes completely black. The app never reaches the Home tab or any screen. Restarting Metro or Android Studio does not fix it.
+The app launches, the native splash screen shows, then the screen goes completely black. The app never reaches the Home tab or any screen. Restarting Metro does not fix it.
 
 ## Standard Daily Startup
 
-**Do this every time you want to develop:**
+**Run the startup script — it handles everything:**
 
-1. Start the emulator from Android Studio Device Manager (click ▶ next to your AVD)
-2. In a terminal, run:
-   ```bash
-   adb reverse tcp:8081 tcp:8081
-   npm start
-   ```
-3. Wait until Metro shows `Dev server ready`.
-4. **Tap the app icon on the emulator screen** (swipe up from the home screen to find it in the app drawer). Do NOT use Android Studio's Run ▶ button.
-5. First time only after opening Dev Menu (`d` in Metro terminal): turn **Fast Refresh OFF**.
+```
+.\start-dev.ps1
+```
 
-**When to use Android Studio's Run ▶ button:** Only when you've installed a new npm package or changed something in the `android/` folder and need to rebuild the APK. Not needed for normal JS/React changes.
+Then tap the **FantasyWaterPoloApp** icon on your phone or emulator. See `docs/dev-setup/emulator-startup.md` for full details.
 
 **Never run `npm run android` repeatedly.** It reinstalls the APK each time and corrupts the Android Activity state.
 
