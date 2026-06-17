@@ -1,46 +1,46 @@
-// Ocean-themed color palette for Fantasy Water Polo App
+// Water polo color palette — navy dominant, white accents, gold & red details
 export const colors = {
-  // Primary ocean blues
-  oceanDeep: '#006994',      // Deep ocean blue
-  oceanMedium: '#0088cc',    // Medium ocean blue
-  oceanLight: '#00a8e8',      // Light ocean blue
-  oceanBright: '#00d4ff',     // Bright aqua
-  
-  // Secondary colors
-  teal: '#20b2aa',           // Teal
-  turquoise: '#40e0d0',      // Turquoise
-  cyan: '#00ffff',            // Cyan
-  seafoam: '#7fffd4',        // Seafoam green
-  
-  // Accent colors
-  coral: '#ff6b6b',           // Coral accent
-  sand: '#f4e4bc',            // Sand beige
-  white: '#ffffff',           // White
-  pearl: '#f8f9fa',           // Pearl white
-  
+  // Navy primaries (dominant — headers, backgrounds, cards)
+  oceanDeep: '#0D1B2A',      // Deep navy
+  oceanMedium: '#1B3A5C',    // Navy
+  oceanLight: '#2E6DA4',     // Steel blue
+  oceanBright: '#4A9FD4',    // Sky blue highlight
+
+  // Secondary (kept for compatibility, mapped to navy family)
+  teal: '#1B3A5C',
+  turquoise: '#2E6DA4',
+  cyan: '#4A9FD4',
+  seafoam: '#C8DFF0',
+
+  // Accent colors — water polo cap colors
+  coral: '#E53935',          // Red (red team caps / danger)
+  sand: '#FFC107',           // Gold / yellow (yellow caps / highlights)
+  white: '#FFFFFF',
+  pearl: '#D6E8F5',          // Light blue (replaces off-white)
+
   // Text colors
-  textDark: '#1a1a2e',        // Dark text
-  textMedium: '#16213e',      // Medium text
-  textLight: '#0f3460',       // Light text
-  textMuted: '#6c757d',       // Muted text
-  
-  // Background colors
-  backgroundLight: '#e8f4f8', // Light sky blue background
-  backgroundWhite: '#ffffff', // White background
-  backgroundGradient: ['#006994', '#00a8e8'], // Gradient colors
-  
+  textDark: '#0D1B2A',       // Deep navy
+  textMedium: '#1B3A5C',     // Navy
+  textLight: '#2E6DA4',      // Steel blue
+  textMuted: '#7A8C9E',      // Blue-gray
+
+  // Background colors — light blue tones
+  backgroundLight: '#C8DFF0',
+  backgroundWhite: '#E0EEF8',
+  backgroundGradient: ['#0D1B2A', '#1B3A5C'],
+
   // Status colors
-  success: '#2ecc71',         // Success green
-  warning: '#f39c12',         // Warning orange
-  error: '#e74c3c',           // Error red
-  info: '#3498db',            // Info blue
-  
-  // Pitch-specific colors (for PitchView component)
+  success: '#2ecc71',
+  warning: '#FFC107',        // Gold (matches yellow accent)
+  error: '#E53935',          // Red (matches red accent)
+  info: '#2E6DA4',
+
+  // Pitch-specific colors
   pitch: {
-    background: '#2d8f3a',           // Water polo pool green/blue
-    lines: '#ffffff',                 // White lines
-    starterZone: 'rgba(0, 200, 255, 0.1)',  // Light blue tint for starters
-    benchZone: 'rgba(128, 128, 128, 0.1)',  // Light gray tint for bench
+    background: '#1B3A5C',              // Dark navy pool
+    lines: '#4A9FD4',                   // Sky blue lines
+    starterZone: 'rgba(255, 193, 7, 0.12)',
+    benchZone: 'rgba(74, 159, 212, 0.08)',
   },
 };
 

@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from 'react-native';
+import { Icons } from '../assets/images/icons';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import {
   fetchFixturesForRound,
@@ -209,7 +211,8 @@ export default function FixturesScreen() {
         {/* Venue (if available) */}
         {fixture.venue && (
           <View style={styles.venueContainer}>
-            <Text style={styles.venueText}>📍 {fixture.venue}</Text>
+            <Image source={Icons.field} style={styles.venueIcon} />
+            <Text style={styles.venueText}>{fixture.venue}</Text>
           </View>
         )}
       </View>
@@ -218,7 +221,7 @@ export default function FixturesScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Text style={styles.emptyEmoji}>🏊‍♂️</Text>
+      <Image source={Icons.player} style={styles.emptyEmoji} />
       <Text style={styles.emptyText}>No fixtures scheduled</Text>
       <Text style={styles.emptySubtext}>
         Check back soon for upcoming matches!
@@ -231,7 +234,7 @@ export default function FixturesScreen() {
       {/* Ocean-themed header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.waveEmoji}>🌊</Text>
+          <Image source={Icons.calendar} style={styles.waveEmoji} />
           <Text style={styles.title}>Fixtures</Text>
           <Text style={styles.subtitle}>Match schedule & results</Text>
         </View>
@@ -288,8 +291,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   waveEmoji: {
-    fontSize: 40,
+    width: 48,
+    height: 48,
     marginBottom: 8,
+    resizeMode: 'contain',
   },
   title: {
     fontSize: 32,
@@ -306,7 +311,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   roundTabsContainer: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     marginHorizontal: spacing.md,
     marginTop: -15,
     marginBottom: spacing.md,
@@ -357,7 +362,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   fixtureCard: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     borderRadius: borderRadius.large,
     padding: spacing.lg,
     marginBottom: spacing.md,
@@ -448,7 +453,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     borderRadius: borderRadius.medium,
     marginBottom: spacing.xs,
     paddingHorizontal: spacing.sm,
@@ -493,6 +498,14 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.oceanBright + '20',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  venueIcon: {
+    width: 12,
+    height: 12,
+    resizeMode: 'contain',
   },
   venueText: {
     fontSize: 12,
@@ -507,8 +520,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   emptyEmoji: {
-    fontSize: 64,
+    width: 64,
+    height: 64,
     marginBottom: spacing.md,
+    resizeMode: 'contain',
   },
   emptyText: {
     fontSize: 18,
@@ -523,7 +538,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   roundInfoBanner: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
     paddingVertical: spacing.md,

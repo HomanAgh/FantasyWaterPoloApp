@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { Icons } from '../assets/images/icons';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import PlayerCard from './PlayerCard';
 
@@ -56,9 +57,10 @@ const PitchView = ({
       activeOpacity={0.7}
     >
       <View style={styles.emptySlotCircle}>
-        <Text style={styles.emptySlotEmoji}>
-          {position === 'GK' ? '🥅' : '🏊'}
-        </Text>
+        <Image
+          source={position === 'GK' ? Icons.goalie : Icons.player}
+          style={styles.emptySlotEmoji}
+        />
       </View>
       <Text style={styles.emptySlotText}>Empty</Text>
     </TouchableOpacity>
@@ -321,8 +323,10 @@ const styles = StyleSheet.create({
     borderColor: colors.white + '40',
   },
   emptySlotEmoji: {
-    fontSize: 24,
+    width: 24,
+    height: 24,
     opacity: 0.5,
+    resizeMode: 'contain',
   },
   emptySlotText: {
     fontSize: 10,

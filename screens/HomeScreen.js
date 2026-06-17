@@ -6,7 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Image,
 } from 'react-native';
+import { Icons } from '../assets/images/icons';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { fetchPlayers } from '../services/playerService';
 import { fetchFixturesForRound } from '../services/fixtureService';
@@ -96,7 +98,7 @@ export default function HomeScreen({ navigation }) {
       {/* Ocean-themed header with gradient effect */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.waveEmoji}>🌊</Text>
+          <Image source={Icons.wave} style={styles.waveEmoji} />
           <Text style={styles.title}>Fantasy Water Polo</Text>
           <Text style={styles.subtitle}>Dive into the action!</Text>
         </View>
@@ -107,9 +109,17 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.gameweekBanner}>
           <View style={styles.gameweekInfo}>
             <Text style={styles.gameweekLabel}>Gameweek {currentRound.round_number}</Text>
-            <Text style={styles.deadlineText}>
-              {isLocked ? '🔴 LIVE' : `⏰ Deadline: ${formatDeadline(currentRound.deadline)}`}
-            </Text>
+            {isLocked ? (
+              <View style={styles.deadlineRow}>
+                <Image source={Icons.locked} style={styles.deadlineIcon} />
+                <Text style={styles.deadlineText}>LIVE</Text>
+              </View>
+            ) : (
+              <View style={styles.deadlineRow}>
+                <Image source={Icons.clock} style={styles.deadlineIcon} />
+                <Text style={styles.deadlineText}>Deadline: {formatDeadline(currentRound.deadline)}</Text>
+              </View>
+            )}
           </View>
           {!isLocked && timeToDeadline && (
             <View style={styles.countdown}>
@@ -129,7 +139,7 @@ export default function HomeScreen({ navigation }) {
       <View style={[styles.card, styles.pointsCard]}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>Points</Text>
-          <Text style={styles.waveIcon}>💧</Text>
+          <Image source={Icons.water} style={styles.waveIcon} />
         </View>
 
         {/* GW points row */}
@@ -165,7 +175,7 @@ export default function HomeScreen({ navigation }) {
       <View style={[styles.card, styles.teamCard]}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>{teamName}</Text>
-          <Text style={styles.teamIcon}>🏊</Text>
+          <Image source={Icons.swimmer} style={styles.teamIcon} />
         </View>
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -178,9 +188,10 @@ export default function HomeScreen({ navigation }) {
             </Text>
             {!isTeamComplete && selectedPlayers.length > 0 && (
               <View style={styles.warningBox}>
-                <Text style={styles.warningText}>
-                  ⚠️ Team incomplete: Need {12 - selectedPlayers.length} more player(s)
-                </Text>
+                <View style={styles.warningRow}>
+                  <Image source={Icons.warning} style={styles.warningIcon} />
+                  <Text style={styles.warningText}>Team incomplete: Need {12 - selectedPlayers.length} more player(s)</Text>
+                </View>
                 {gkCount < 2 && (
                   <Text style={styles.warningText}>
                     • Need {2 - gkCount} more goalkeeper(s)
@@ -219,27 +230,27 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       {/* Quick Actions with ocean colors */}
-      <View style={styles.card}>
+      <View style={[styles.card, styles.quickActionsCard]}>
         <Text style={styles.cardTitle}>Quick Actions</Text>
         <TouchableOpacity
           style={[styles.actionButton, styles.actionButton1]}
           onPress={() => navigation.navigate('Players')}
           activeOpacity={0.8}>
-          <Text style={styles.actionButtonIcon}>👥</Text>
+          <Image source={Icons.player} style={styles.actionButtonIcon} />
           <Text style={styles.actionButtonText}>Browse Players</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionButton, styles.actionButton2]}
           onPress={() => navigation.navigate('Transfers')}
           activeOpacity={0.8}>
-          <Text style={styles.actionButtonIcon}>🔄</Text>
+          <Image source={Icons.swap} style={styles.actionButtonIcon} />
           <Text style={styles.actionButtonText}>Make Transfers</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.actionButton, styles.actionButton3]}
           onPress={() => navigation.navigate('Leagues')}
           activeOpacity={0.8}>
-          <Text style={styles.actionButtonIcon}>🏆</Text>
+          <Image source={Icons.trophy} style={styles.actionButtonIcon} />
           <Text style={styles.actionButtonText}>Join League</Text>
         </TouchableOpacity>
       </View>
@@ -248,7 +259,7 @@ export default function HomeScreen({ navigation }) {
       <View style={[styles.card, styles.fixturesCard]}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>Upcoming Fixtures</Text>
-          <Text style={styles.fixtureIcon}>📅</Text>
+          <Image source={Icons.calendar} style={styles.fixtureIcon} />
         </View>
         {upcomingFixtures.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -301,8 +312,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   waveEmoji: {
-    fontSize: 40,
+    width: 48,
+    height: 48,
     marginBottom: 8,
+    resizeMode: 'contain',
   },
   title: {
     fontSize: 32,
@@ -319,26 +332,26 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   card: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     margin: spacing.md,
     padding: spacing.lg,
     borderRadius: borderRadius.large,
     ...shadows.medium,
     borderWidth: 1,
-    borderColor: colors.oceanBright + '20',
+    borderColor: colors.sand + '50',
   },
   pointsCard: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     borderLeftWidth: 4,
-    borderLeftColor: colors.oceanMedium,
+    borderLeftColor: colors.sand,
   },
   teamCard: {
     borderLeftWidth: 4,
-    borderLeftColor: colors.teal,
+    borderLeftColor: colors.sand,
   },
   fixturesCard: {
     borderLeftWidth: 4,
-    borderLeftColor: colors.turquoise,
+    borderLeftColor: colors.oceanBright,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -352,13 +365,19 @@ const styles = StyleSheet.create({
     color: colors.textDark,
   },
   waveIcon: {
-    fontSize: 24,
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   teamIcon: {
-    fontSize: 24,
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   fixtureIcon: {
-    fontSize: 24,
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   pointsRow: {
     flexDirection: 'row',
@@ -392,11 +411,11 @@ const styles = StyleSheet.create({
   pointsValue: {
     fontSize: 52,
     fontWeight: 'bold',
-    color: colors.oceanMedium,
+    color: colors.sand,
     textAlign: 'center',
   },
   pointsValueTotal: {
-    color: colors.teal,
+    color: colors.sand,
   },
   deductionNote: {
     fontSize: 11,
@@ -411,16 +430,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   warningBox: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: colors.coral + '18',
     padding: spacing.md,
     borderRadius: borderRadius.medium,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: '#FCD34D',
+    borderColor: colors.coral,
   },
   warningText: {
     fontSize: 13,
-    color: '#92400E',
+    color: colors.coral,
     fontWeight: '600',
     marginBottom: spacing.xs,
   },
@@ -477,32 +496,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.oceanMedium,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
     marginTop: spacing.sm,
     ...shadows.small,
   },
-  actionButton1: {
-    backgroundColor: colors.oceanBright + '30',
-    borderWidth: 2,
-    borderColor: colors.oceanBright,
+  quickActionsCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.coral,
   },
-  actionButton2: {
-    backgroundColor: colors.teal + '30',
-    borderWidth: 2,
-    borderColor: colors.teal,
-  },
-  actionButton3: {
-    backgroundColor: colors.turquoise + '30',
-    borderWidth: 2,
-    borderColor: colors.turquoise,
-  },
+  actionButton1: {},
+  actionButton2: {},
+  actionButton3: {},
   actionButtonIcon: {
-    fontSize: 20,
+    width: 24,
+    height: 24,
     marginRight: spacing.sm,
+    resizeMode: 'contain',
+    tintColor: colors.white,
   },
   actionButtonText: {
-    color: colors.oceanDeep,
+    color: colors.white,
     fontSize: 16,
     fontWeight: '700',
     textAlign: 'center',
@@ -554,10 +569,31 @@ const styles = StyleSheet.create({
     color: colors.white,
     marginBottom: spacing.xs,
   },
+  deadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  deadlineIcon: {
+    width: 14,
+    height: 14,
+    resizeMode: 'contain',
+  },
   deadlineText: {
     fontSize: 14,
     color: colors.oceanBright,
     fontWeight: '600',
+  },
+  warningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: spacing.xs,
+  },
+  warningIcon: {
+    width: 14,
+    height: 14,
+    resizeMode: 'contain',
   },
   countdown: {
     backgroundColor: colors.oceanBright + '30',
@@ -577,7 +613,7 @@ const styles = StyleSheet.create({
   liveIndicator: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#EF4444',
+    color: colors.coral,
     marginTop: spacing.sm,
     letterSpacing: 2,
   },

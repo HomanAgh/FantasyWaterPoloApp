@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Image,
 } from 'react-native';
+import { Icons } from '../assets/images/icons';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { fetchGlobalLeaderboard, getUserGlobalRank } from '../services/leagueService';
 import { getUserId } from '../utils/userIdHelper';
@@ -78,7 +80,7 @@ export default function LeaguesScreen() {
       }>
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.headerEmoji}>🏆</Text>
+          <Image source={Icons.trophy} style={styles.headerEmoji} />
           <Text style={styles.title}>Leagues</Text>
           <Text style={styles.subtitle}>Compete with other managers</Text>
         </View>
@@ -89,7 +91,7 @@ export default function LeaguesScreen() {
         <View style={[styles.card, styles.yourRankCard]}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>Your Global Rank</Text>
-            <Text style={styles.trophyEmoji}>🎯</Text>
+            <Image source={Icons.goal} style={styles.trophyEmoji} />
           </View>
           <View style={styles.yourRankContent}>
             <View style={styles.yourRankMain}>
@@ -112,14 +114,14 @@ export default function LeaguesScreen() {
           style={[styles.primaryButton, styles.disabledButton]}
           activeOpacity={1}
           disabled={true}>
-          <Text style={styles.buttonIcon}>➕</Text>
+          <Image source={Icons.handshake} style={styles.buttonIcon} />
           <Text style={styles.primaryButtonText}>Create Private League</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.secondaryButton, styles.disabledButton]}
           activeOpacity={1}
           disabled={true}>
-          <Text style={styles.buttonIcon}>🔗</Text>
+          <Image source={Icons.handshake} style={styles.buttonIcon} />
           <Text style={styles.secondaryButtonText}>Join Private League</Text>
         </TouchableOpacity>
       </View>
@@ -128,7 +130,7 @@ export default function LeaguesScreen() {
       <View style={[styles.card, styles.leaderboardCard]}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>Global Leaderboard</Text>
-          <Text style={styles.leaderboardIcon}>📊</Text>
+          <Image source={Icons.graph} style={styles.leaderboardIcon} />
         </View>
 
         {loading && !refreshing ? (
@@ -138,7 +140,7 @@ export default function LeaguesScreen() {
           </View>
         ) : error ? (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorEmoji}>⚠️</Text>
+            <Image source={Icons.warning} style={styles.errorEmoji} />
             <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity
               style={styles.retryButton}
@@ -148,7 +150,7 @@ export default function LeaguesScreen() {
           </View>
         ) : leaderboard.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>🏊</Text>
+            <Image source={Icons.wave} style={styles.emptyEmoji} />
             <Text style={styles.emptyText}>No rankings yet</Text>
             <Text style={styles.emptySubtext}>
               Be the first to build your team and score points!
@@ -179,13 +181,6 @@ function LeaderboardItem({ entry, isCurrentUser }) {
     return styles.rankDefault;
   };
 
-  const getRankEmoji = (rank) => {
-    if (rank === 1) return '🥇';
-    if (rank === 2) return '🥈';
-    if (rank === 3) return '🥉';
-    return null;
-  };
-
   return (
     <View
       style={[
@@ -193,8 +188,8 @@ function LeaderboardItem({ entry, isCurrentUser }) {
         isCurrentUser && styles.currentUserItem,
       ]}>
       <View style={[styles.rankBadge, getRankStyle(entry.rank)]}>
-        {getRankEmoji(entry.rank) ? (
-          <Text style={styles.rankEmoji}>{getRankEmoji(entry.rank)}</Text>
+        {entry.rank <= 3 ? (
+          <Image source={Icons.badge} style={styles.rankEmoji} />
         ) : (
           <Text style={styles.rank}>{entry.rank}</Text>
         )}
@@ -237,8 +232,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerEmoji: {
-    fontSize: 40,
+    width: 48,
+    height: 48,
     marginBottom: spacing.sm,
+    resizeMode: 'contain',
   },
   title: {
     fontSize: 28,
@@ -255,27 +252,27 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   card: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     margin: spacing.md,
     padding: spacing.lg,
     borderRadius: borderRadius.large,
     ...shadows.medium,
     borderWidth: 1,
-    borderColor: colors.oceanBright + '20',
+    borderColor: colors.sand + '50',
   },
   yourRankCard: {
     borderLeftWidth: 4,
-    borderLeftColor: colors.success,
-    backgroundColor: colors.success + '05',
+    borderLeftColor: colors.sand,
+    backgroundColor: colors.sand + '08',
   },
   actionsCard: {
     borderLeftWidth: 4,
-    borderLeftColor: colors.oceanMedium,
+    borderLeftColor: colors.coral,
     position: 'relative',
   },
   leaderboardCard: {
     borderLeftWidth: 4,
-    borderLeftColor: colors.turquoise,
+    borderLeftColor: colors.sand,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -289,10 +286,14 @@ const styles = StyleSheet.create({
     color: colors.textDark,
   },
   trophyEmoji: {
-    fontSize: 24,
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   leaderboardIcon: {
-    fontSize: 24,
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   yourRankContent: {
     alignItems: 'center',
@@ -362,7 +363,9 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   buttonIcon: {
-    fontSize: 18,
+    width: 18,
+    height: 18,
+    resizeMode: 'contain',
   },
   primaryButtonText: {
     color: colors.white,
@@ -390,8 +393,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorEmoji: {
-    fontSize: 48,
+    width: 48,
+    height: 48,
     marginBottom: spacing.sm,
+    resizeMode: 'contain',
   },
   errorText: {
     fontSize: 16,
@@ -415,8 +420,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyEmoji: {
-    fontSize: 48,
+    width: 48,
+    height: 48,
     marginBottom: spacing.sm,
+    resizeMode: 'contain',
   },
   emptyText: {
     fontSize: 16,
@@ -452,22 +459,22 @@ const styles = StyleSheet.create({
     ...shadows.small,
   },
   rankGold: {
-    backgroundColor: '#FFD700' + '30',
+    backgroundColor: colors.sand + '30',
     borderWidth: 2,
-    borderColor: '#FFD700',
+    borderColor: colors.sand,
   },
   rankSilver: {
-    backgroundColor: '#C0C0C0' + '30',
+    backgroundColor: colors.pearl + '60',
     borderWidth: 2,
-    borderColor: '#C0C0C0',
+    borderColor: colors.oceanBright,
   },
   rankBronze: {
-    backgroundColor: '#CD7F32' + '30',
+    backgroundColor: colors.coral + '20',
     borderWidth: 2,
-    borderColor: '#CD7F32',
+    borderColor: colors.coral,
   },
   rankDefault: {
-    backgroundColor: colors.oceanBright + '20',
+    backgroundColor: colors.oceanMedium + '40',
     borderWidth: 2,
     borderColor: colors.oceanBright,
   },
@@ -477,7 +484,9 @@ const styles = StyleSheet.create({
     color: colors.textDark,
   },
   rankEmoji: {
-    fontSize: 24,
+    width: 22,
+    height: 22,
+    resizeMode: 'contain',
   },
   leaderboardInfo: {
     flex: 1,

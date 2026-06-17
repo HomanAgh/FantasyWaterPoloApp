@@ -10,7 +10,9 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  Image,
 } from 'react-native';
+import { Icons } from '../assets/images/icons';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { useAuth } from '../context/AuthContext';
 
@@ -116,8 +118,8 @@ const AuthScreen = ({ onNewUser }) => {
     >
       {/* Decorative background waves */}
       <View style={styles.bgWaves}>
-        <Text style={styles.waveTop}>🌊</Text>
-        <Text style={styles.waveBottom}>🌊</Text>
+        <Image source={Icons.wave} style={styles.waveTop} />
+        <Image source={Icons.wave} style={styles.waveBottom} />
       </View>
 
       <ScrollView
@@ -127,10 +129,13 @@ const AuthScreen = ({ onNewUser }) => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.icon}>🏊‍♂️</Text>
+          <Image source={Icons.player} style={styles.icon} />
           <Text style={styles.welcomeText}>Welcome to</Text>
           <Text style={styles.appTitle}>Fantasy Water Polo</Text>
-          <Text style={styles.subtitle}>Dive into the action! 💧</Text>
+          <View style={styles.subtitleRow}>
+            <Text style={styles.subtitle}>Dive into the action!</Text>
+            <Image source={Icons.water} style={styles.subtitleIcon} />
+          </View>
         </View>
 
         {/* Mode tabs */}
@@ -248,16 +253,20 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -20,
     right: -20,
-    fontSize: 150,
+    width: 150,
+    height: 150,
     opacity: 0.1,
+    resizeMode: 'contain',
     transform: [{ rotate: '45deg' }],
   },
   waveBottom: {
     position: 'absolute',
     bottom: -20,
     left: -20,
-    fontSize: 150,
+    width: 150,
+    height: 150,
     opacity: 0.1,
+    resizeMode: 'contain',
     transform: [{ rotate: '-45deg' }],
   },
   scroll: {
@@ -272,8 +281,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   icon: {
-    fontSize: 80,
+    width: 80,
+    height: 80,
     marginBottom: spacing.sm,
+    resizeMode: 'contain',
   },
   welcomeText: {
     fontSize: 18,
@@ -287,15 +298,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   subtitle: {
     fontSize: 15,
     color: colors.oceanMedium,
     fontWeight: '600',
   },
+  subtitleIcon: {
+    width: 15,
+    height: 15,
+    resizeMode: 'contain',
+  },
   tabs: {
     flexDirection: 'row',
     width: '100%',
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     borderRadius: borderRadius.large,
     padding: 4,
     marginBottom: spacing.lg,
@@ -320,7 +341,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     borderRadius: borderRadius.large,
     padding: spacing.lg,
     marginBottom: spacing.lg,

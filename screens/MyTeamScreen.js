@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   Modal,
   Alert,
+  Image,
 } from 'react-native';
+import { Icons } from '../assets/images/icons';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
@@ -184,7 +186,7 @@ export default function MyTeamScreen({ navigation }) {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.teamEmoji}>🏊</Text>
+          <Image source={Icons.swimmer} style={styles.teamEmoji} />
           <Text style={styles.title}>{teamName}</Text>
           
           {/* Budget and Status Row */}
@@ -219,7 +221,7 @@ export default function MyTeamScreen({ navigation }) {
       {/* Locked Team Banner */}
       {isLocked && currentRound && (
         <View style={styles.lockedBanner}>
-          <Text style={styles.lockedIcon}>🔒</Text>
+          <Image source={Icons.locked} style={styles.lockedIcon} />
           <Text style={styles.lockedText}>
             Team Locked - Gameweek {currentRound.round_number} in progress
           </Text>
@@ -229,7 +231,7 @@ export default function MyTeamScreen({ navigation }) {
       {/* Team Status Message */}
       {!isTeamValid() && selectedPlayers.length > 0 && (
         <View style={styles.warningBanner}>
-          <Text style={styles.warningIcon}>⚠️</Text>
+          <Image source={Icons.warning} style={styles.warningIcon} />
           <View style={styles.warningContent}>
             <Text style={styles.warningTitle}>Complete Your Team</Text>
             <Text style={styles.warningText}>
@@ -253,7 +255,7 @@ export default function MyTeamScreen({ navigation }) {
         />
       ) : (
         <ScrollView style={styles.emptyContainer} contentContainerStyle={styles.emptyContent}>
-          <Text style={styles.emptyEmoji}>🏊‍♂️</Text>
+          <Image source={Icons.player} style={styles.emptyEmoji} />
           <Text style={styles.emptyTitle}>No Players Yet</Text>
           <Text style={styles.emptyText}>
             Start building your team by adding players from the Players tab
@@ -263,7 +265,7 @@ export default function MyTeamScreen({ navigation }) {
             onPress={() => navigation.navigate('Players')}
             activeOpacity={0.8}
           >
-            <Text style={styles.emptyButtonIcon}>➕</Text>
+            <Image source={Icons.player} style={styles.emptyButtonIcon} />
             <Text style={styles.emptyButtonText}>Add Players</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -287,9 +289,10 @@ export default function MyTeamScreen({ navigation }) {
                 {/* Player Info Header */}
                 <View style={styles.modalHeader}>
                   <View style={styles.modalPlayerInfo}>
-                    <Text style={styles.modalPlayerEmoji}>
-                      {selectedPlayer.position === 'GK' ? '🥅' : '🏊'}
-                    </Text>
+                    <Image
+                      source={selectedPlayer.position === 'GK' ? Icons.goalie : Icons.player}
+                      style={styles.modalPlayerEmoji}
+                    />
                     <View>
                       <Text style={styles.modalPlayerName}>{selectedPlayer.name}</Text>
                       <Text style={styles.modalPlayerDetails}>
@@ -313,7 +316,7 @@ export default function MyTeamScreen({ navigation }) {
                       onPress={handleSetCaptain}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.modalButtonIcon}>⭐</Text>
+                      <Image source={Icons.trophy} style={styles.modalButtonIcon} />
                       <Text style={styles.modalButtonText}>Set as Captain</Text>
                       <Text style={styles.modalButtonSubtext}>2× points</Text>
                     </TouchableOpacity>
@@ -326,7 +329,7 @@ export default function MyTeamScreen({ navigation }) {
                       onPress={handleShowSwapModal}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.modalButtonIcon}>🔄</Text>
+                      <Image source={Icons.swap} style={styles.modalButtonIcon} />
                       <Text style={styles.modalButtonText}>Swap with Substitute</Text>
                     </TouchableOpacity>
                   ) : (
@@ -335,7 +338,7 @@ export default function MyTeamScreen({ navigation }) {
                       onPress={handleShowSwapModal}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.modalButtonIcon}>🔄</Text>
+                      <Image source={Icons.swap} style={styles.modalButtonIcon} />
                       <Text style={styles.modalButtonText}>Swap with Starter</Text>
                     </TouchableOpacity>
                   )}
@@ -432,9 +435,10 @@ export default function MyTeamScreen({ navigation }) {
                         activeOpacity={0.7}
                       >
                         <View style={styles.swapPlayerInfo}>
-                          <Text style={styles.swapPlayerEmoji}>
-                            {player.position === 'GK' ? '🥅' : '🏊'}
-                          </Text>
+                          <Image
+                            source={player.position === 'GK' ? Icons.goalie : Icons.player}
+                            style={styles.swapPlayerEmoji}
+                          />
                           <View style={styles.swapPlayerDetails}>
                             <Text style={styles.swapPlayerName}>{player.name}</Text>
                             <Text style={styles.swapPlayerMeta}>
@@ -487,8 +491,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   teamEmoji: {
-    fontSize: 40,
+    width: 48,
+    height: 48,
     marginBottom: spacing.xs,
+    resizeMode: 'contain',
   },
   title: {
     fontSize: 28,
@@ -545,24 +551,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   lockedBanner: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.coral + '18',
     marginHorizontal: spacing.md,
     marginTop: spacing.md,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
     borderWidth: 2,
-    borderColor: '#FCA5A5',
+    borderColor: colors.coral,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
   },
   lockedIcon: {
-    fontSize: 20,
+    width: 20,
+    height: 20,
+    resizeMode: 'contain',
   },
   lockedText: {
     fontSize: 14,
-    color: '#991B1B',
+    color: colors.coral,
     fontWeight: '700',
   },
   warningBanner: {
@@ -578,7 +586,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   warningIcon: {
-    fontSize: 24,
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   warningContent: {
     flex: 1,
@@ -604,8 +614,10 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   emptyEmoji: {
-    fontSize: 80,
+    width: 80,
+    height: 80,
     marginBottom: spacing.lg,
+    resizeMode: 'contain',
   },
   emptyTitle: {
     fontSize: 24,
@@ -631,7 +643,9 @@ const styles = StyleSheet.create({
     ...shadows.medium,
   },
   emptyButtonIcon: {
-    fontSize: 20,
+    width: 20,
+    height: 20,
+    resizeMode: 'contain',
   },
   emptyButtonText: {
     color: colors.white,
@@ -645,7 +659,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
     padding: spacing.xl,
@@ -668,7 +682,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalPlayerEmoji: {
-    fontSize: 48,
+    width: 48,
+    height: 48,
+    resizeMode: 'contain',
   },
   modalPlayerName: {
     fontSize: 20,
@@ -681,17 +697,17 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   modalCaptainBadge: {
-    backgroundColor: '#FCD34D',
+    backgroundColor: colors.sand,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.round,
     borderWidth: 2,
-    borderColor: '#F59E0B',
+    borderColor: colors.oceanDeep,
   },
   modalCaptainText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#92400E',
+    color: colors.oceanDeep,
   },
   modalActions: {
     gap: spacing.md,
@@ -720,7 +736,9 @@ const styles = StyleSheet.create({
     borderColor: colors.textMuted + '40',
   },
   modalButtonIcon: {
-    fontSize: 24,
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   modalButtonText: {
     fontSize: 16,
@@ -779,8 +797,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   swapPlayerEmoji: {
-    fontSize: 28,
+    width: 28,
+    height: 28,
     marginRight: spacing.md,
+    resizeMode: 'contain',
   },
   swapPlayerDetails: {
     flex: 1,
@@ -802,7 +822,7 @@ const styles = StyleSheet.create({
   },
   // Bottom Bar
   bottomBar: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     paddingBottom: spacing.md + 20,

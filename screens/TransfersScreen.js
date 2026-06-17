@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   Modal,
   Alert,
+  Image,
 } from 'react-native';
+import { Icons } from '../assets/images/icons';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
@@ -149,7 +151,7 @@ export default function TransfersScreen({ navigation }) {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.headerEmoji}>🔄</Text>
+          <Image source={Icons.swap} style={styles.headerEmoji} />
           <Text style={styles.title}>Transfers</Text>
           
           {/* Budget and Deadline Info */}
@@ -174,9 +176,8 @@ export default function TransfersScreen({ navigation }) {
           {/* Transfer Info */}
           {isUnlimitedPhase ? (
             <View style={styles.transferInfoBadge}>
-              <Text style={styles.transferInfoText}>
-                💧 Free Transfers: Unlimited (Pre-GW1)
-              </Text>
+              <Image source={Icons.water} style={styles.transferInfoIcon} />
+              <Text style={styles.transferInfoText}>Free Transfers: Unlimited (Pre-GW1)</Text>
             </View>
           ) : (
             <View style={styles.transferInfoRow}>
@@ -184,9 +185,9 @@ export default function TransfersScreen({ navigation }) {
                 styles.transferInfoBadge,
                 freeTransfers === 0 && styles.transferInfoBadgeWarning,
               ]}>
+                <Image source={Icons.water} style={styles.transferInfoIcon} />
                 <Text style={styles.transferInfoText}>
-                  💧 Free Transfers: {freeTransfers}
-                  {freeTransfers === 2 ? ' (Max)' : ''}
+                  Free Transfers: {freeTransfers}{freeTransfers === 2 ? ' (Max)' : ''}
                 </Text>
               </View>
               {transfersMadeThisRound > 0 && (
@@ -202,9 +203,8 @@ export default function TransfersScreen({ navigation }) {
           {/* Point deductions warning */}
           {pendingDeductions > 0 && (
             <View style={styles.deductionBadge}>
-              <Text style={styles.deductionText}>
-                ⚠️ -{pendingDeductions} pts hit this GW
-              </Text>
+              <Image source={Icons.warning} style={styles.deductionIcon} />
+              <Text style={styles.deductionText}>-{pendingDeductions} pts hit this GW</Text>
             </View>
           )}
 
@@ -214,9 +214,10 @@ export default function TransfersScreen({ navigation }) {
               styles.deadlineBadge,
               isLocked && styles.deadlineBadgeLocked
             ]}>
-              <Text style={styles.deadlineIcon}>
-                {isLocked ? '🔒' : '⏰'}
-              </Text>
+              <Image
+                source={isLocked ? Icons.locked : Icons.clock}
+                style={styles.deadlineIcon}
+              />
               <Text style={styles.deadlineText}>
                 {getDeadlineText()}
               </Text>
@@ -228,7 +229,7 @@ export default function TransfersScreen({ navigation }) {
       {/* Locked Banner */}
       {isLocked && currentRound && (
         <View style={styles.lockedBanner}>
-          <Text style={styles.lockedIcon}>🔒</Text>
+          <Image source={Icons.locked} style={styles.lockedIcon} />
           <View style={styles.lockedContent}>
             <Text style={styles.lockedTitle}>Transfers Locked</Text>
             <Text style={styles.lockedText}>
@@ -241,7 +242,7 @@ export default function TransfersScreen({ navigation }) {
       {/* Team Status */}
       {!isLocked && selectedPlayers.length < 12 && (
         <View style={styles.statusBanner}>
-          <Text style={styles.statusIcon}>📋</Text>
+          <Image source={Icons.graph} style={styles.statusIcon} />
           <View style={styles.statusContent}>
             <Text style={styles.statusTitle}>{getTeamStatus()}</Text>
             <Text style={styles.statusText}>
@@ -267,7 +268,7 @@ export default function TransfersScreen({ navigation }) {
         </>
       ) : (
         <ScrollView style={styles.emptyContainer} contentContainerStyle={styles.emptyContent}>
-          <Text style={styles.emptyEmoji}>👥</Text>
+          <Image source={Icons.player} style={styles.emptyEmoji} />
           <Text style={styles.emptyTitle}>Start Building Your Team</Text>
           <Text style={styles.emptyText}>
             You have ${STARTING_BUDGET.toFixed(1)}M to build a squad of 12 players
@@ -275,15 +276,15 @@ export default function TransfersScreen({ navigation }) {
           
           <View style={styles.emptyRequirements}>
             <View style={styles.emptyRequirementItem}>
-              <Text style={styles.emptyRequirementIcon}>🥅</Text>
+              <Image source={Icons.goalie} style={styles.emptyRequirementIcon} />
               <Text style={styles.emptyRequirementText}>2 Goalkeepers</Text>
             </View>
             <View style={styles.emptyRequirementItem}>
-              <Text style={styles.emptyRequirementIcon}>🏊</Text>
+              <Image source={Icons.player} style={styles.emptyRequirementIcon} />
               <Text style={styles.emptyRequirementText}>10 Field Players</Text>
             </View>
             <View style={styles.emptyRequirementItem}>
-              <Text style={styles.emptyRequirementIcon}>⭐</Text>
+              <Image source={Icons.trophy} style={styles.emptyRequirementIcon} />
               <Text style={styles.emptyRequirementText}>7 Starters + 5 Subs</Text>
             </View>
           </View>
@@ -293,7 +294,7 @@ export default function TransfersScreen({ navigation }) {
             onPress={() => navigation.navigate('Players')}
             activeOpacity={0.8}
           >
-            <Text style={styles.emptyButtonIcon}>➕</Text>
+            <Image source={Icons.player} style={styles.emptyButtonIcon} />
             <Text style={styles.emptyButtonText}>Select Players</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -317,9 +318,10 @@ export default function TransfersScreen({ navigation }) {
                 {/* Player Info Header */}
                 <View style={styles.modalHeader}>
                   <View style={styles.modalPlayerInfo}>
-                    <Text style={styles.modalPlayerEmoji}>
-                      {selectedPlayer.position === 'GK' ? '🥅' : '🏊'}
-                    </Text>
+                    <Image
+                      source={selectedPlayer.position === 'GK' ? Icons.goalie : Icons.player}
+                      style={styles.modalPlayerEmoji}
+                    />
                     <View style={styles.modalPlayerDetails}>
                       <Text style={styles.modalPlayerName}>{selectedPlayer.name}</Text>
                       <Text style={styles.modalPlayerSubtext}>
@@ -350,7 +352,7 @@ export default function TransfersScreen({ navigation }) {
                     onPress={handleReplacePlayer}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.modalButtonIcon}>🔄</Text>
+                    <Image source={Icons.swap} style={styles.modalButtonIcon} />
                     <View style={styles.modalButtonTextContainer}>
                       <Text style={styles.modalButtonText}>Replace Player</Text>
                       <Text style={styles.modalButtonSubtext}>
@@ -365,7 +367,7 @@ export default function TransfersScreen({ navigation }) {
                     onPress={handleViewStats}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.modalButtonIcon}>📊</Text>
+                    <Image source={Icons.graph} style={styles.modalButtonIcon} />
                     <View style={styles.modalButtonTextContainer}>
                       <Text style={styles.modalButtonText}>View Stats</Text>
                       <Text style={styles.modalButtonSubtext}>
@@ -382,7 +384,7 @@ export default function TransfersScreen({ navigation }) {
                       onPress={handleRemovePlayer}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.modalButtonIcon}>🗑️</Text>
+                      <Image source={Icons.warning} style={styles.modalButtonIcon} />
                       <View style={styles.modalButtonTextContainer}>
                         <Text style={styles.modalButtonTextDanger}>Remove from Team</Text>
                         <Text style={styles.modalButtonSubtextDanger}>
@@ -428,8 +430,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerEmoji: {
-    fontSize: 40,
+    width: 48,
+    height: 48,
     marginBottom: spacing.xs,
+    resizeMode: 'contain',
   },
   title: {
     fontSize: 28,
@@ -480,13 +484,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   transferInfoBadge: {
-    backgroundColor: colors.success + '30',
+    backgroundColor: colors.sand + '25',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.round,
     borderWidth: 1,
-    borderColor: colors.success,
+    borderColor: colors.sand + '80',
     marginBottom: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  transferInfoIcon: {
+    width: 12,
+    height: 12,
+    resizeMode: 'contain',
   },
   transferInfoBadgeWarning: {
     backgroundColor: colors.warning + '30',
@@ -512,17 +524,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   deductionBadge: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.coral + '20',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.round,
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: colors.coral,
     marginBottom: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  deductionIcon: {
+    width: 12,
+    height: 12,
+    resizeMode: 'contain',
   },
   deductionText: {
     fontSize: 11,
-    color: '#991B1B',
+    color: colors.coral,
     fontWeight: '700',
   },
   deadlineBadge: {
@@ -541,7 +561,9 @@ const styles = StyleSheet.create({
     borderColor: '#FCA5A5',
   },
   deadlineIcon: {
-    fontSize: 12,
+    width: 14,
+    height: 14,
+    resizeMode: 'contain',
   },
   deadlineText: {
     fontSize: 12,
@@ -549,19 +571,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   lockedBanner: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.coral + '18',
     marginHorizontal: spacing.md,
     marginTop: spacing.md,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
     borderWidth: 2,
-    borderColor: '#FCA5A5',
+    borderColor: colors.coral,
+    borderLeftWidth: 5,
+    borderLeftColor: colors.coral,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
   },
   lockedIcon: {
-    fontSize: 24,
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   lockedContent: {
     flex: 1,
@@ -578,19 +604,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   statusBanner: {
-    backgroundColor: colors.info + '20',
+    backgroundColor: colors.sand + '15',
     marginHorizontal: spacing.md,
     marginTop: spacing.md,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
     borderWidth: 2,
-    borderColor: colors.info,
+    borderColor: colors.sand + '80',
+    borderLeftWidth: 5,
+    borderLeftColor: colors.sand,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
   statusIcon: {
-    fontSize: 24,
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   statusContent: {
     flex: 1,
@@ -615,8 +645,10 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   emptyEmoji: {
-    fontSize: 80,
+    width: 80,
+    height: 80,
     marginBottom: spacing.lg,
+    resizeMode: 'contain',
   },
   emptyTitle: {
     fontSize: 24,
@@ -633,7 +665,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   emptyRequirements: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     padding: spacing.lg,
     borderRadius: borderRadius.large,
     marginBottom: spacing.xl,
@@ -648,7 +680,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   emptyRequirementIcon: {
-    fontSize: 24,
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   emptyRequirementText: {
     fontSize: 16,
@@ -666,7 +700,9 @@ const styles = StyleSheet.create({
     ...shadows.medium,
   },
   emptyButtonIcon: {
-    fontSize: 20,
+    width: 20,
+    height: 20,
+    resizeMode: 'contain',
   },
   emptyButtonText: {
     color: colors.white,
@@ -674,7 +710,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   actionsCard: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     margin: spacing.md,
     padding: spacing.lg,
     borderRadius: borderRadius.large,
@@ -721,7 +757,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
     padding: spacing.xl,
@@ -744,7 +780,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalPlayerEmoji: {
-    fontSize: 56,
+    width: 56,
+    height: 56,
+    resizeMode: 'contain',
   },
   modalPlayerDetails: {
     flex: 1,
@@ -810,9 +848,9 @@ const styles = StyleSheet.create({
     borderColor: colors.info,
   },
   modalButtonDanger: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.coral + '18',
     borderWidth: 2,
-    borderColor: '#FCA5A5',
+    borderColor: colors.coral,
   },
   modalButtonCancel: {
     backgroundColor: colors.backgroundLight,
@@ -820,7 +858,9 @@ const styles = StyleSheet.create({
     borderColor: colors.textMuted + '40',
   },
   modalButtonIcon: {
-    fontSize: 28,
+    width: 28,
+    height: 28,
+    resizeMode: 'contain',
   },
   modalButtonTextContainer: {
     flex: 1,

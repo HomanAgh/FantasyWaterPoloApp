@@ -9,7 +9,9 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
+import { Icons } from '../assets/images/icons';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import * as userProfileService from '../services/userProfileService';
 
@@ -96,17 +98,20 @@ const OnboardingScreen = ({ userId, onComplete }) => {
     >
       {/* Ocean-themed background */}
       <View style={styles.backgroundWaves}>
-        <Text style={styles.waveTop}>🌊</Text>
-        <Text style={styles.waveBottom}>🌊</Text>
+        <Image source={Icons.wave} style={styles.waveTop} />
+        <Image source={Icons.wave} style={styles.waveBottom} />
       </View>
 
       <View style={styles.content}>
         {/* Header with water polo theme */}
         <View style={styles.header}>
-          <Text style={styles.iconLarge}>🏊‍♂️</Text>
+          <Image source={Icons.player} style={styles.iconLarge} />
           <Text style={styles.welcomeText}>Welcome to</Text>
           <Text style={styles.appTitle}>Fantasy Water Polo</Text>
-          <Text style={styles.subtitle}>Dive into the action! 💧</Text>
+          <View style={styles.subtitleRow}>
+            <Text style={styles.subtitle}>Dive into the action!</Text>
+            <Image source={Icons.water} style={styles.subtitleIcon} />
+          </View>
         </View>
 
         {/* Input Card */}
@@ -139,7 +144,7 @@ const OnboardingScreen = ({ userId, onComplete }) => {
           ) : (
             <>
               <Text style={styles.buttonText}>Create My Team</Text>
-              <Text style={styles.buttonEmoji}>🎯</Text>
+              <Image source={Icons.goal} style={styles.buttonEmoji} />
             </>
           )}
         </TouchableOpacity>
@@ -165,16 +170,20 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -20,
     right: -20,
-    fontSize: 150,
+    width: 150,
+    height: 150,
     opacity: 0.1,
+    resizeMode: 'contain',
     transform: [{ rotate: '45deg' }],
   },
   waveBottom: {
     position: 'absolute',
     bottom: -20,
     left: -20,
-    fontSize: 150,
+    width: 150,
+    height: 150,
     opacity: 0.1,
+    resizeMode: 'contain',
     transform: [{ rotate: '-45deg' }],
   },
   content: {
@@ -189,8 +198,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xxl,
   },
   iconLarge: {
-    fontSize: 100,
+    width: 100,
+    height: 100,
     marginBottom: spacing.md,
+    resizeMode: 'contain',
   },
   welcomeText: {
     fontSize: 20,
@@ -204,14 +215,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   subtitle: {
     fontSize: 16,
     color: colors.oceanMedium,
     fontWeight: '600',
   },
+  subtitleIcon: {
+    width: 16,
+    height: 16,
+    resizeMode: 'contain',
+  },
   inputCard: {
     width: '100%',
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     borderRadius: borderRadius.large,
     padding: spacing.lg,
     marginBottom: spacing.xl,
@@ -267,7 +288,9 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   buttonEmoji: {
-    fontSize: 20,
+    width: 20,
+    height: 20,
+    resizeMode: 'contain',
   },
 });
 

@@ -6,7 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Image,
 } from 'react-native';
+
+import { Icons } from '../assets/images/icons';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { fetchPlayerDetail } from '../services/playerService';
 
@@ -78,7 +81,7 @@ export default function PlayerDetailScreen({ route, navigation }) {
         </TouchableOpacity>
 
         <View style={styles.headerBody}>
-          <Text style={styles.positionEmoji}>{isGK ? '🥅' : '🏊'}</Text>
+        <Image source={isGK ? Icons.goalie : Icons.player} style={styles.positionEmoji} />
           <Text style={styles.playerName}>{displayName}</Text>
           <Text style={styles.playerTeam}>{displayTeam}</Text>
 
@@ -135,28 +138,31 @@ export default function PlayerDetailScreen({ route, navigation }) {
         <>
           {/* Season Stats Grid */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📊 Season Stats</Text>
+          <View style={styles.sectionTitleRow}>
+            <Image source={Icons.graph} style={styles.sectionTitleIcon} />
+            <Text style={styles.sectionTitle}>Season Stats</Text>
+          </View>
             <View style={styles.statsGrid}>
               {isGK ? (
                 <>
-                  <StatCell label="Saves" value={detail.totalSaves} emoji="🧤" />
-                  <StatCell label="Clean Sheet Periods" value={detail.totalCleanSheets} emoji="🧱" highlight={detail.totalCleanSheets > 0} />
-                  <StatCell label="Blocks" value={detail.totalBlocks} emoji="✋" highlight={detail.totalBlocks > 0} />
-                  <StatCell label="Sprints" value={detail.totalSprints} emoji="⚡" highlight={detail.totalSprints > 0} />
-                  <StatCell label="Games" value={detail.gamesPlayed} emoji="🏊" />
-                  <StatCell label="Minutes" value={detail.totalMinutes} emoji="⏱️" />
-                  <StatCell label="Red Cards" value={detail.totalReds} emoji="🟥" danger={detail.totalReds > 0} />
+                  <StatCell label="Saves" value={detail.totalSaves} icon={Icons.gloves} />
+                  <StatCell label="Clean Sheet Periods" value={detail.totalCleanSheets} icon={Icons.cleansheet} />
+                  <StatCell label="Blocks" value={detail.totalBlocks} icon={Icons.block} />
+                  <StatCell label="Sprints" value={detail.totalSprints} icon={Icons.sprint} />
+                  <StatCell label="Games" value={detail.gamesPlayed} icon={Icons.games} />
+                  <StatCell label="Minutes" value={detail.totalMinutes} icon={Icons.clock} />
+                  <StatCell label="Red Cards" value={detail.totalReds} icon={Icons.redCard} danger={detail.totalReds > 0} />
                 </>
               ) : (
                 <>
-                  <StatCell label="Goals" value={detail.totalGoals} emoji="🎯" />
-                  <StatCell label="Assists" value={detail.totalAssists} emoji="🤝" />
-                  <StatCell label="Blocks" value={detail.totalBlocks} emoji="✋" highlight={detail.totalBlocks > 0} />
-                  <StatCell label="Sprints" value={detail.totalSprints} emoji="⚡" highlight={detail.totalSprints > 0} />
-                  <StatCell label="Clean Sheet Periods" value={detail.totalCleanSheets} emoji="🧱" highlight={detail.totalCleanSheets > 0} />
-                  <StatCell label="Games" value={detail.gamesPlayed} emoji="🏊" />
-                  <StatCell label="Minutes" value={detail.totalMinutes} emoji="⏱️" />
-                  <StatCell label="Red Cards" value={detail.totalReds} emoji="🟥" danger={detail.totalReds > 0} />
+                  <StatCell label="Goals" value={detail.totalGoals} icon={Icons.goal} />
+                  <StatCell label="Assists" value={detail.totalAssists} icon={Icons.handshake} />
+                  <StatCell label="Blocks" value={detail.totalBlocks} icon={Icons.block} />
+                  <StatCell label="Sprints" value={detail.totalSprints} icon={Icons.sprint} />
+                  <StatCell label="Clean Sheet Periods" value={detail.totalCleanSheets} icon={Icons.cleansheet} />
+                  <StatCell label="Games" value={detail.gamesPlayed} icon={Icons.games} />
+                  <StatCell label="Minutes" value={detail.totalMinutes} icon={Icons.clock} />
+                  <StatCell label="Red Cards" value={detail.totalReds} icon={Icons.redCard} danger={detail.totalReds > 0} />
                 </>
               )}
             </View>
@@ -165,7 +171,10 @@ export default function PlayerDetailScreen({ route, navigation }) {
           {/* GW Form Strip */}
           {detail.formHistory.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>📈 Recent Form</Text>
+              <View style={styles.sectionTitleRow}>
+                <Image source={Icons.graph} style={styles.sectionTitleIcon} />
+                <Text style={styles.sectionTitle}>Recent Form</Text>
+              </View>
               <View style={styles.formStrip}>
                 {detail.formHistory.map((gw, i) => (
                   <View key={i} style={styles.formItem}>
@@ -184,7 +193,10 @@ export default function PlayerDetailScreen({ route, navigation }) {
           {/* Recent Match Log */}
           {detail.recentMatches.length > 0 ? (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>🗓️ Recent Matches</Text>
+              <View style={styles.sectionTitleRow}>
+                <Image source={Icons.calendar} style={styles.sectionTitleIcon} />
+                <Text style={styles.sectionTitle}>Recent Matches</Text>
+              </View>
               {detail.recentMatches.map((match, i) => {
                 const opp = formatMatchOpponent(match);
                 return (
@@ -204,10 +216,10 @@ export default function PlayerDetailScreen({ route, navigation }) {
                       ) : (
                         <>
                           {match.goals > 0 && <MatchStat label="Goals" value={match.goals} />}
-                          {match.assists > 0 && <MatchStat label="Ast" value={match.assists} />}
+                          {match.assists > 0 && <MatchStat label="Ass" value={match.assists} />}
                         </>
                       )}
-                      {match.blocks > 0 && <MatchStat label="Blk" value={match.blocks} />}
+                      {match.blocks > 0 && <MatchStat label="Blc" value={match.blocks} />}
                       {match.sprints > 0 && <MatchStat label="Spr" value={match.sprints} />}
                       {match.cleanSheets > 0 && (
                         <Text style={styles.cardIcon}>🧱×{match.cleanSheets}</Text>
@@ -233,7 +245,10 @@ export default function PlayerDetailScreen({ route, navigation }) {
             </View>
           ) : (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>🗓️ Recent Matches</Text>
+              <View style={styles.sectionTitleRow}>
+                <Image source={Icons.calendar} style={styles.sectionTitleIcon} />
+                <Text style={styles.sectionTitle}>Recent Matches</Text>
+              </View>
               <View style={styles.emptySection}>
                 <Text style={styles.emptySectionText}>No match data available yet</Text>
               </View>
@@ -247,7 +262,7 @@ export default function PlayerDetailScreen({ route, navigation }) {
   );
 }
 
-function StatCell({ label, value, emoji, accent, danger, highlight }) {
+function StatCell({ label, value, emoji, icon, accent, danger, highlight }) {
   return (
     <View style={[
       styles.statCell,
@@ -255,7 +270,10 @@ function StatCell({ label, value, emoji, accent, danger, highlight }) {
       danger && styles.statCellDanger,
       highlight && styles.statCellHighlight,
     ]}>
-      <Text style={styles.statCellEmoji}>{emoji}</Text>
+      {icon
+        ? <Image source={icon} style={styles.statCellIcon} />
+        : <Text style={styles.statCellEmoji}>{emoji}</Text>
+      }
       <Text style={[
         styles.statCellValue,
         danger && styles.statCellDangerText,
@@ -303,8 +321,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   positionEmoji: {
-    fontSize: 52,
+    width: 64,
+    height: 64,
     marginBottom: spacing.sm,
+    resizeMode: 'contain',
   },
   playerName: {
     fontSize: 26,
@@ -400,12 +420,28 @@ const styles = StyleSheet.create({
   section: {
     margin: spacing.md,
     marginBottom: 0,
+    backgroundColor: colors.pearl,
+    borderRadius: borderRadius.large,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.sand + '50',
+    ...shadows.small,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: colors.textDark,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     marginBottom: spacing.sm,
+  },
+  sectionTitleIcon: {
+    width: 20,
+    height: 20,
+    resizeMode: 'contain',
   },
   statsGrid: {
     flexDirection: 'row',
@@ -413,7 +449,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   statCell: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     borderRadius: borderRadius.medium,
     padding: spacing.md,
     alignItems: 'center',
@@ -421,23 +457,29 @@ const styles = StyleSheet.create({
     minWidth: '30%',
     ...shadows.small,
     borderWidth: 1,
-    borderColor: colors.oceanBright + '20',
+    borderColor: colors.sand + '40',
   },
   statCellAccent: {
-    borderColor: colors.warning + '60',
-    backgroundColor: '#fffbf0',
+    borderColor: colors.sand,
+    backgroundColor: colors.sand + '10',
   },
   statCellDanger: {
-    borderColor: colors.error + '60',
-    backgroundColor: '#fff5f5',
+    borderColor: colors.coral + '80',
+    backgroundColor: colors.coral + '10',
   },
   statCellHighlight: {
-    borderColor: colors.success + '60',
-    backgroundColor: '#f0fdf4',
+    borderColor: colors.sand + '80',
+    backgroundColor: colors.sand + '18',
   },
   statCellEmoji: {
     fontSize: 22,
     marginBottom: 4,
+  },
+  statCellIcon: {
+    width: 28,
+    height: 28,
+    marginBottom: 4,
+    resizeMode: 'contain',
   },
   statCellValue: {
     fontSize: 24,
@@ -448,7 +490,7 @@ const styles = StyleSheet.create({
     color: colors.error,
   },
   statCellHighlightText: {
-    color: colors.success,
+    color: colors.oceanDeep,
   },
   statCellLabel: {
     fontSize: 11,
@@ -460,7 +502,7 @@ const styles = StyleSheet.create({
   formStrip: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     borderRadius: borderRadius.medium,
     padding: spacing.md,
     gap: spacing.sm,
@@ -492,13 +534,15 @@ const styles = StyleSheet.create({
   matchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     borderRadius: borderRadius.medium,
     padding: spacing.md,
     marginBottom: spacing.sm,
     ...shadows.small,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.oceanMedium,
+    borderWidth: 1,
+    borderColor: colors.sand + '40',
+    borderLeftWidth: 4,
+    borderLeftColor: colors.sand,
   },
   matchLeft: {
     flex: 1,
@@ -560,7 +604,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   emptySection: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     borderRadius: borderRadius.medium,
     padding: spacing.xl,
     alignItems: 'center',

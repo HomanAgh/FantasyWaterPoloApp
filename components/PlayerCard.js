@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { Icons } from '../assets/images/icons';
 import { colors, shadows, spacing } from '../styles/theme';
 
 /**
@@ -45,9 +46,10 @@ const PlayerCard = ({
           isCaptain && styles.captainCircle,
           disabled && styles.disabledCircle
         ]}>
-          <Text style={styles.jerseyEmoji}>
-            {player.position === 'GK' ? '🥅' : '🏊'}
-          </Text>
+          <Image
+            source={player.position === 'GK' ? Icons.goalie : Icons.player}
+            style={styles.jerseyEmoji}
+          />
         </View>
         
         {/* Player Name */}
@@ -86,19 +88,19 @@ const PlayerCard = ({
       position: 'absolute',
       top: -4,
       right: 8,
-      backgroundColor: '#FCD34D',
+      backgroundColor: colors.sand,
       width: 22,
       height: 22,
       borderRadius: 11,
       justifyContent: 'center',
       alignItems: 'center',
       borderWidth: 2,
-      borderColor: '#F59E0B',
+      borderColor: colors.oceanDeep,
       zIndex: 10,
       ...shadows.medium,
     },
     captainBadgeText: {
-      color: '#92400E',
+      color: colors.oceanDeep,
       fontSize: 11,
       fontWeight: 'bold',
     },
@@ -113,7 +115,7 @@ const PlayerCard = ({
       ...shadows.small,
     },
     jerseyCircleStarter: {
-      backgroundColor: colors.white,
+      backgroundColor: colors.pearl,
       borderColor: colors.oceanMedium,
     },
     jerseyCircleSub: {
@@ -121,7 +123,7 @@ const PlayerCard = ({
       borderColor: colors.textMuted,
     },
     captainCircle: {
-      borderColor: '#F59E0B',
+      borderColor: colors.sand,
       borderWidth: 3,
       ...shadows.medium,
     },
@@ -129,7 +131,9 @@ const PlayerCard = ({
       opacity: 0.5,
     },
     jerseyEmoji: {
-      fontSize: 24,
+      width: 24,
+      height: 24,
+      resizeMode: 'contain',
     },
     playerName: {
       fontSize: 10,

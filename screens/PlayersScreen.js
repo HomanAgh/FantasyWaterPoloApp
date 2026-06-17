@@ -9,7 +9,9 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
+  Image,
 } from 'react-native';
+import { Icons } from '../assets/images/icons';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { searchAndFilterPlayersWithStats } from '../services/playerService';
 import { fetchTeams } from '../services/teamService';
@@ -255,7 +257,7 @@ export default function PlayersScreen({ navigation, route }) {
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.headerEmoji}>👥</Text>
+          <Image source={Icons.player} style={styles.headerEmoji} />
           <Text style={styles.title}>
             {mode === 'replace' && replacingPlayer
               ? 'Select Replacement'
@@ -290,7 +292,7 @@ export default function PlayersScreen({ navigation, route }) {
       {/* Locked Banner */}
       {isLocked && currentRound && (
         <View style={styles.lockedBanner}>
-          <Text style={styles.lockedIcon}>🔒</Text>
+          <Image source={Icons.locked} style={styles.lockedIcon} />
           <Text style={styles.lockedText}>
             Transfers locked - Gameweek {currentRound.round_number} in progress
           </Text>
@@ -300,14 +302,15 @@ export default function PlayersScreen({ navigation, route }) {
       {/* Error Message */}
       {errorMessage ? (
         <View style={styles.errorBanner}>
-          <Text style={styles.errorBannerText}>⚠️ {errorMessage}</Text>
+          <Image source={Icons.warning} style={styles.errorBannerIcon} />
+          <Text style={styles.errorBannerText}>{errorMessage}</Text>
         </View>
       ) : null}
 
       {/* Search and Filter */}
       <View style={styles.filterContainer}>
         <View style={styles.searchWrapper}>
-          <Text style={styles.searchIcon}>🔍</Text>
+          <Image source={Icons.player} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search players..."
@@ -345,7 +348,10 @@ export default function PlayersScreen({ navigation, route }) {
           style={styles.teamDropdown}
           onPress={() => setShowTeamPicker(true)}
           activeOpacity={0.7}>
-          <Text style={styles.teamDropdownLabel}>🏊 Team:</Text>
+          <View style={styles.teamDropdownLabelRow}>
+            <Image source={Icons.swimmer} style={styles.teamDropdownLabelIcon} />
+            <Text style={styles.teamDropdownLabel}>Team:</Text>
+          </View>
           <Text style={styles.teamDropdownValue}>
             {teams.find(t => t.id === selectedTeam)?.name || 'All Teams'}
           </Text>
@@ -358,7 +364,10 @@ export default function PlayersScreen({ navigation, route }) {
             style={styles.priceDropdown}
             onPress={() => setShowPricePicker(true)}
             activeOpacity={0.7}>
-            <Text style={styles.teamDropdownLabel}>💰 Max:</Text>
+            <View style={styles.teamDropdownLabelRow}>
+              <Image source={Icons.trophy} style={styles.teamDropdownLabelIcon} />
+              <Text style={styles.teamDropdownLabel}>Max:</Text>
+            </View>
             <Text style={styles.teamDropdownValue}>
               {maxPrice !== null ? `$${maxPrice.toFixed(1)}M` : 'Any price'}
             </Text>
@@ -632,9 +641,12 @@ export default function PlayersScreen({ navigation, route }) {
                           }}
                           disabled={isLocked}
                           activeOpacity={0.7}>
-                          <Text style={[styles.pcBtnInText, (isLocked || squadFinalized) && styles.pcBtnDisabledText]}>
-                            {isLocked ? '🔒' : squadFinalized ? '⇄' : '✓'}
-                          </Text>
+                          {isLocked
+                            ? <Image source={Icons.locked} style={styles.pcBtnLockIcon} />
+                            : <Text style={[styles.pcBtnInText, squadFinalized && styles.pcBtnDisabledText]}>
+                                {squadFinalized ? '⇄' : '✓'}
+                              </Text>
+                          }
                         </TouchableOpacity>
                       ) : (
                         <TouchableOpacity
@@ -648,9 +660,12 @@ export default function PlayersScreen({ navigation, route }) {
                           }}
                           disabled={!canAdd || isLocked}
                           activeOpacity={0.7}>
-                          <Text style={[styles.pcBtnAddText, (!canAdd || isLocked) && styles.pcBtnDisabledText]}>
-                            {isLocked ? '🔒' : (redirectToTransfers || mode === 'replace') ? '⇄' : '+'}
-                          </Text>
+                          {isLocked
+                            ? <Image source={Icons.locked} style={styles.pcBtnLockIcon} />
+                            : <Text style={[styles.pcBtnAddText, !canAdd && styles.pcBtnDisabledText]}>
+                                {(redirectToTransfers || mode === 'replace') ? '⇄' : '+'}
+                              </Text>
+                          }
                         </TouchableOpacity>
                       )}
                     </View>
@@ -684,8 +699,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerEmoji: {
-    fontSize: 40,
+    width: 48,
+    height: 48,
     marginBottom: spacing.sm,
+    resizeMode: 'contain',
   },
   title: {
     fontSize: 28,
@@ -696,7 +713,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
   teamInfoBanner: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
@@ -737,6 +754,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: '#FCA5A5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorBannerText: {
     fontSize: 14,
@@ -745,7 +765,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   filterContainer: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     padding: spacing.md,
     ...shadows.small,
     borderBottomWidth: 1,
@@ -762,8 +782,10 @@ const styles = StyleSheet.create({
     borderColor: colors.oceanBright + '40',
   },
   searchIcon: {
-    fontSize: 20,
+    width: 20,
+    height: 20,
     marginRight: spacing.sm,
+    resizeMode: 'contain',
   },
   searchInput: {
     flex: 1,
@@ -801,7 +823,7 @@ const styles = StyleSheet.create({
   },
   // ── Table layout ──
   tableOuter: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     ...shadows.small,
   },
   // Header cell base
@@ -874,7 +896,7 @@ const styles = StyleSheet.create({
   },
   // Row stripe / state
   rowEven: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
   },
   rowOdd: {
     backgroundColor: colors.backgroundLight,
@@ -1001,22 +1023,45 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   lockedBanner: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.coral + '18',
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: '#FCA5A5',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.coral,
   },
   lockedIcon: {
-    fontSize: 20,
+    width: 20,
+    height: 20,
+    resizeMode: 'contain',
+  },
+  errorBannerIcon: {
+    width: 18,
+    height: 18,
+    resizeMode: 'contain',
+    marginRight: spacing.xs,
+  },
+  teamDropdownLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  teamDropdownLabelIcon: {
+    width: 14,
+    height: 14,
+    resizeMode: 'contain',
+  },
+  pcBtnLockIcon: {
+    width: 16,
+    height: 16,
+    resizeMode: 'contain',
   },
   lockedText: {
     fontSize: 14,
-    color: '#991B1B',
+    color: colors.coral,
     fontWeight: '700',
   },
   replacementBanner: {
@@ -1043,12 +1088,12 @@ const styles = StyleSheet.create({
   teamDropdown: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
     marginTop: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.oceanBright + '40',
+    borderColor: colors.sand + '60',
     ...shadows.small,
   },
   teamDropdownLabel: {
@@ -1077,11 +1122,11 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
     borderWidth: 1,
-    borderColor: colors.oceanBright + '40',
+    borderColor: colors.sand + '60',
     ...shadows.small,
   },
   affordableChip: {
@@ -1090,11 +1135,11 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.medium,
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.oceanBright + '40',
+    borderColor: colors.sand + '60',
   },
   affordableChipActive: {
-    backgroundColor: colors.teal,
-    borderColor: colors.teal,
+    backgroundColor: colors.sand,
+    borderColor: colors.sand,
   },
   affordableChipText: {
     fontSize: 13,
@@ -1111,7 +1156,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.pearl,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '70%',

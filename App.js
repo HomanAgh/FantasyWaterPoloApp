@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StatusBar, Text } from 'react-native';
+import { StatusBar, Image } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from './styles/theme';
+import { Icons } from './assets/images/icons';
 import { RoundProvider } from './context/RoundContext';
 import { TeamProvider, useTeam } from './context/TeamContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -32,12 +33,12 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.oceanMedium,
+        tabBarActiveTintColor: colors.sand,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          backgroundColor: colors.white,
+          backgroundColor: colors.oceanDeep,
           borderTopWidth: 2,
-          borderTopColor: colors.oceanBright + '40',
+          borderTopColor: colors.sand + '60',
           height: 60 + insets.bottom,
           paddingBottom: 8 + insets.bottom,
           paddingTop: 8,
@@ -57,7 +58,7 @@ function MainTabs() {
         component={HomeScreen}
         options={{
           title: 'Home',
-          tabBarIcon: () => <Text style={{ fontSize: 24 }}>🏠</Text>,
+          tabBarIcon: ({ focused }) => <Image source={Icons.house} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
         }}
       />
       <Tab.Screen
@@ -65,7 +66,7 @@ function MainTabs() {
         component={MyTeamScreen}
         options={{
           title: 'My Team',
-          tabBarIcon: () => <Text style={{ fontSize: 24 }}>🏊</Text>,
+          tabBarIcon: ({ focused }) => <Image source={Icons.swimmer} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
         }}
       />
       <Tab.Screen
@@ -73,7 +74,7 @@ function MainTabs() {
         component={PlayersScreen}
         options={{
           title: 'Players',
-          tabBarIcon: () => <Text style={{ fontSize: 24 }}>👥</Text>,
+          tabBarIcon: ({ focused }) => <Image source={Icons.player} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
         }}
       />
       <Tab.Screen
@@ -81,7 +82,7 @@ function MainTabs() {
         component={TransfersScreen}
         options={{
           title: 'Transfers',
-          tabBarIcon: () => <Text style={{ fontSize: 24 }}>🔄</Text>,
+          tabBarIcon: ({ focused }) => <Image source={Icons.swap} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
         }}
       />
       <Tab.Screen
@@ -89,7 +90,7 @@ function MainTabs() {
         component={FixturesScreen}
         options={{
           title: 'Fixtures',
-          tabBarIcon: () => <Text style={{ fontSize: 24 }}>📅</Text>,
+          tabBarIcon: ({ focused }) => <Image source={Icons.calendar} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
         }}
       />
       <Tab.Screen
@@ -97,7 +98,7 @@ function MainTabs() {
         component={LeaguesScreen}
         options={{
           title: 'Leagues',
-          tabBarIcon: () => <Text style={{ fontSize: 24 }}>🏆</Text>,
+          tabBarIcon: ({ focused }) => <Image source={Icons.trophy} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
         }}
       />
     </Tab.Navigator>
