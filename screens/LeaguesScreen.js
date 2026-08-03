@@ -348,15 +348,13 @@ const styles = StyleSheet.create({
     ...shadows.small,
   },
   secondaryButton: {
-    backgroundColor: colors.oceanBright + '30',
+    backgroundColor: colors.oceanMedium,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    borderWidth: 2,
-    borderColor: colors.oceanBright,
     ...shadows.small,
   },
   disabledButton: {
@@ -374,7 +372,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   secondaryButtonText: {
-    color: colors.oceanDeep,
+    color: colors.white,
     fontSize: 16,
     fontWeight: '700',
     textAlign: 'center',
@@ -507,10 +505,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   pointsContainer: {
-    backgroundColor: colors.oceanBright + '20',
+    backgroundColor: colors.sand + '25',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.round,
+    borderWidth: 1,
+    borderColor: colors.sand + '60',
   },
   leaderboardPoints: {
     fontSize: 14,

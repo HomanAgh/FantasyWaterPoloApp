@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,22 @@ import {
   Modal,
   Alert,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
 import { colors, shadows, borderRadius, spacing } from '../styles/theme';
 import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
+import { useAuth } from '../context/AuthContext';
 import PitchView from '../components/PitchView';
 import * as playerRoundPointsService from '../services/playerRoundPointsService';
+import { fetchAllRounds } from '../services/roundService';
+import {
+  getSnapshotRoundIds,
+  getGwPicksForRound,
+  getDeductionForRound,
+} from '../services/userGwPicksService';
+import supabase from '../config/supabaseClient';
 
 export default function MyTeamScreen({ navigation }) {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
@@ -22,9 +31,21 @@ export default function MyTeamScreen({ navigation }) {
   const [swapModalVisible, setSwapModalVisible] = useState(false);
   const [enrichedPlayers, setEnrichedPlayers] = useState([]);
 
-  // Get team data from context
-  const { 
-    selectedPlayers, 
+  // GW history state
+  const [selectedGwId, setSelectedGwId] = useState(null); // null = current GW
+  const [pastRounds, setPastRounds] = useState([]);
+  const [historyPlayers, setHistoryPlayers] = useState([]);
+  const [historyCaptainId, setHistoryCaptainId] = useState(null);
+  const [historyGwScore, setHistoryGwScore] = useState(0);
+  const [historyDeduction, setHistoryDeduction] = useState(0);
+  const [historyRound, setHistoryRound] = useState(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const isHistoryMode = selectedGwId !== null;
+
+  // Context
+  const {
+    selectedPlayers,
     setPlayerAsStarter,
     swapPlayers,
     reorderOutfieldSubs,
@@ -40,135 +61,189 @@ export default function MyTeamScreen({ navigation }) {
     teamName,
   } = useTeam();
 
-  // Get round info from context
+  const { userId } = useAuth();
   const { currentRound, isLocked, timeToDeadline, formatDeadline } = useRound();
 
-  /**
-   * Load gameweek points for all players
-   */
+  // ── Current GW: enrich players with round points ──
   useEffect(() => {
     const loadGameweekPoints = async () => {
       if (!currentRound || selectedPlayers.length === 0) {
         setEnrichedPlayers(selectedPlayers);
         return;
       }
-
       const playerIds = selectedPlayers.map(p => p.id);
       const { data: pointsMap } = await playerRoundPointsService
         .getMultiplePlayersPointsForRound(playerIds, currentRound.id);
-      
       const enriched = selectedPlayers.map(p => ({
         ...p,
-        points: pointsMap[p.id] || 0  // Replace career points with gameweek points
+        points: pointsMap[p.id] || 0,
       }));
-      
       setEnrichedPlayers(enriched);
     };
-
     loadGameweekPoints();
   }, [currentRound, selectedPlayers]);
 
-  /**
-   * Calculate live gameweek points (including captain bonus)
-   */
+  // ── Load past rounds for GW picker on mount ──
+  useEffect(() => {
+    if (!userId) return;
+    loadPastRounds();
+  }, [userId]);
+
+  const loadPastRounds = async () => {
+    const [{ data: snapshotIds }, { data: allRounds }] = await Promise.all([
+      getSnapshotRoundIds(userId),
+      fetchAllRounds(),
+    ]);
+    if (!allRounds || !snapshotIds) return;
+    const snapshotSet = new Set(snapshotIds);
+    const played = allRounds.filter(r => snapshotSet.has(r.id));
+    setPastRounds(played);
+  };
+
+  // ── Load frozen squad when a past GW tab is selected ──
+  useEffect(() => {
+    if (!selectedGwId || !userId) return;
+    loadHistoryForRound(selectedGwId);
+  }, [selectedGwId, userId]);
+
+  const loadHistoryForRound = useCallback(async (roundId) => {
+    setLoadingHistory(true);
+    const round = pastRounds.find(r => r.id === roundId);
+    setHistoryRound(round || null);
+
+    const [{ data: picks }, deduction] = await Promise.all([
+      getGwPicksForRound(userId, roundId),
+      getDeductionForRound(userId, roundId),
+    ]);
+    setHistoryDeduction(deduction);
+
+    if (!picks || picks.length === 0) {
+      setHistoryPlayers([]);
+      setHistoryCaptainId(null);
+      setHistoryGwScore(0);
+      setLoadingHistory(false);
+      return;
+    }
+
+    const allPlayerIds = picks.map(p => p.player_id);
+    const [{ data: pointsMap }, { data: playerRows }] = await Promise.all([
+      playerRoundPointsService.getMultiplePlayersPointsForRound(allPlayerIds, roundId),
+      fetchPlayersByIds(allPlayerIds),
+    ]);
+
+    const playerInfoMap = {};
+    (playerRows || []).forEach(p => { playerInfoMap[p.id] = p; });
+
+    const captain = picks.find(p => p.is_captain);
+    setHistoryCaptainId(captain?.player_id || null);
+
+    const enriched = picks.map(pick => {
+      const info = playerInfoMap[pick.player_id] || {};
+      return {
+        id: pick.player_id,
+        name: info.name || 'Unknown',
+        position: info.position || 'Outfield',
+        team: info.teams?.name || '—',
+        price: info.price ? parseFloat(info.price) : 0,
+        isStarter: pick.is_starter,
+        isCaptain: pick.is_captain,
+        points: pointsMap[pick.player_id] ?? 0,
+        positionOrder: 0,
+      };
+    });
+
+    const gwScore = enriched
+      .filter(p => p.isStarter)
+      .reduce((sum, p) => sum + (p.isCaptain ? p.points * 2 : p.points), 0);
+
+    setHistoryPlayers(enriched);
+    setHistoryGwScore(gwScore);
+    setLoadingHistory(false);
+  }, [userId, pastRounds]);
+
+  const fetchPlayersByIds = async (ids) => {
+    try {
+      const { data, error } = await supabase
+        .from('players')
+        .select('id, name, position, price, teams(name)')
+        .in('id', ids);
+      if (error) throw error;
+      return { data: data || [] };
+    } catch {
+      return { data: [] };
+    }
+  };
+
+  // ── Live GW points (current mode only) ──
   const liveGameweekPoints = React.useMemo(() => {
     if (enrichedPlayers.length === 0) return 0;
-    
     return enrichedPlayers
-      .filter(p => p.isStarter) // Only count starters
+      .filter(p => p.isStarter)
       .reduce((sum, player) => {
-        const points = player.points || 0;
-        // Captain gets 2x points
-        if (player.id === captainId) {
-          return sum + (points * 2);
-        }
-        return sum + points;
+        const pts = player.points || 0;
+        return sum + (player.id === captainId ? pts * 2 : pts);
       }, 0);
   }, [enrichedPlayers, captainId]);
 
-  /**
-   * Handle player card press - show action modal
-   */
+  // ── History derived values ──
+  const historyNet = Math.max(0, historyGwScore - historyDeduction);
+
+  // ── What to pass to PitchView ──
+  const displayPlayers = isHistoryMode ? historyPlayers : enrichedPlayers;
+  const displayCaptainId = isHistoryMode ? historyCaptainId : captainId;
+
+  // ── Player modal handlers ──
   const handlePlayerPress = (playerId, player) => {
     setSelectedPlayer(player);
     setModalVisible(true);
   };
 
-  /**
-   * Handle empty slot press
-   */
-  const handleEmptySlotPress = (position, isStarter) => {
-    navigation.navigate('Transfers');
+  const handleEmptySlotPress = () => {
+    if (!isHistoryMode) navigation.navigate('Transfers');
   };
 
-  /**
-   * Show swap modal to select which player to swap with
-   */
   const handleShowSwapModal = () => {
     setModalVisible(false);
     setSwapModalVisible(true);
   };
 
-  /**
-   * Perform the swap between selected player and chosen swap target
-   */
   const handleSwapWithPlayer = async (targetPlayerId) => {
     setSwapModalVisible(false);
     await swapPlayers(selectedPlayer.id, targetPlayerId);
     setSelectedPlayer(null);
   };
 
-  /**
-   * Set player as captain
-   */
   const handleSetCaptain = async () => {
     setModalVisible(false);
     await setCaptain(selectedPlayer.id, isLocked);
     setSelectedPlayer(null);
   };
 
-  /**
-   * Outfield substitutes sorted by priority (positionOrder), used for reordering
-   */
   const sortedOutfieldSubs = enrichedPlayers
     .filter(p => !p.isStarter && p.position === 'Outfield')
     .sort((a, b) => (a.positionOrder || 0) - (b.positionOrder || 0));
 
-  /**
-   * Move the selected outfield sub one position higher in priority
-   */
   const handleMoveSubUp = async () => {
     const idx = sortedOutfieldSubs.findIndex(p => p.id === selectedPlayer?.id);
     if (idx <= 0) return;
     setModalVisible(false);
-    const swapTarget = sortedOutfieldSubs[idx - 1];
-    await reorderOutfieldSubs(selectedPlayer.id, swapTarget.id);
+    await reorderOutfieldSubs(selectedPlayer.id, sortedOutfieldSubs[idx - 1].id);
     setSelectedPlayer(null);
   };
 
-  /**
-   * Move the selected outfield sub one position lower in priority
-   */
   const handleMoveSubDown = async () => {
     const idx = sortedOutfieldSubs.findIndex(p => p.id === selectedPlayer?.id);
     if (idx < 0 || idx >= sortedOutfieldSubs.length - 1) return;
     setModalVisible(false);
-    const swapTarget = sortedOutfieldSubs[idx + 1];
-    await reorderOutfieldSubs(selectedPlayer.id, swapTarget.id);
+    await reorderOutfieldSubs(selectedPlayer.id, sortedOutfieldSubs[idx + 1].id);
     setSelectedPlayer(null);
   };
 
-  /**
-   * Close modal
-   */
   const handleCloseModal = () => {
     setModalVisible(false);
     setSelectedPlayer(null);
   };
 
-  /**
-   * Format time to deadline
-   */
   const getDeadlineText = () => {
     if (!currentRound) return 'No active round';
     if (isLocked) return `Gameweek ${currentRound.round_number} - In Progress`;
@@ -183,53 +258,121 @@ export default function MyTeamScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+
+      {/* ── Header ── */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Image source={Icons.swimmer} style={styles.teamEmoji} />
           <Text style={styles.title}>{teamName}</Text>
-          
-          {/* Budget and Status Row */}
-          <View style={styles.statsRow}>
-            <View style={styles.statBadge}>
-              <Text style={styles.statLabel}>Budget</Text>
-              <Text style={styles.statValue}>${remainingBudget.toFixed(1)}M</Text>
-            </View>
-            <View style={styles.statBadge}>
-              <Text style={styles.statLabel}>Points</Text>
-              <Text style={styles.statValue}>{liveGameweekPoints}</Text>
-            </View>
-            <View style={[styles.statBadge, isTeamValid() && styles.statBadgeSuccess]}>
-              <Text style={styles.statLabel}>Squad</Text>
-              <Text style={styles.statValue}>
-                {selectedPlayers.length}/{12}
-              </Text>
-            </View>
-          </View>
 
-          {/* Deadline Info */}
-          {currentRound && (
-            <View style={styles.deadlineBadge}>
-              <Text style={styles.deadlineText}>
-                {getDeadlineText()}
-              </Text>
+          {isHistoryMode ? (
+            /* History mode: GW score summary */
+            <View style={styles.historyScoreRow}>
+              <View style={styles.historyScoreBlock}>
+                <Text style={styles.historyScoreLabel}>GW {historyRound?.round_number ?? '—'}</Text>
+                <Text style={styles.historyScoreValue}>{historyGwScore}</Text>
+                <Text style={styles.historyScoreUnit}>pts</Text>
+              </View>
+              {historyDeduction > 0 && (
+                <>
+                  <View style={styles.historyScoreDivider} />
+                  <View style={styles.historyScoreBlock}>
+                    <Text style={styles.historyScoreLabel}>HIT</Text>
+                    <Text style={[styles.historyScoreValue, styles.historyScoreHit]}>
+                      -{historyDeduction}
+                    </Text>
+                  </View>
+                  <View style={styles.historyScoreDivider} />
+                  <View style={styles.historyScoreBlock}>
+                    <Text style={styles.historyScoreLabel}>NET</Text>
+                    <Text style={[styles.historyScoreValue, styles.historyScoreNet]}>
+                      {historyNet}
+                    </Text>
+                  </View>
+                </>
+              )}
             </View>
+          ) : (
+            /* Current mode: Budget / Points / Squad badges */
+            <>
+              <View style={styles.statsRow}>
+                <View style={styles.statBadge}>
+                  <Text style={styles.statLabel}>Budget</Text>
+                  <Text style={styles.statValue}>${remainingBudget.toFixed(1)}M</Text>
+                </View>
+                <View style={styles.statBadge}>
+                  <Text style={styles.statLabel}>Points</Text>
+                  <Text style={styles.statValue}>{liveGameweekPoints}</Text>
+                </View>
+                <View style={[styles.statBadge, isTeamValid() && styles.statBadgeSuccess]}>
+                  <Text style={styles.statLabel}>Squad</Text>
+                  <Text style={styles.statValue}>{selectedPlayers.length}/{12}</Text>
+                </View>
+              </View>
+              {currentRound && (
+                <View style={styles.deadlineBadge}>
+                  <Text style={styles.deadlineText}>{getDeadlineText()}</Text>
+                </View>
+              )}
+            </>
           )}
         </View>
       </View>
 
-      {/* Locked Team Banner */}
-      {isLocked && currentRound && (
-        <View style={styles.lockedBanner}>
-          <Image source={Icons.locked} style={styles.lockedIcon} />
-          <Text style={styles.lockedText}>
-            Team Locked - Gameweek {currentRound.round_number} in progress
+      {/* ── GW Picker ── */}
+      {pastRounds.length > 0 && (
+        <View style={styles.gwPickerWrapper}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.gwPickerScroll}>
+            <TouchableOpacity
+              style={[styles.gwTab, !isHistoryMode && styles.gwTabActive]}
+              onPress={() => setSelectedGwId(null)}
+              activeOpacity={0.8}>
+              <Text style={[styles.gwTabText, !isHistoryMode && styles.gwTabTextActive]}>
+                Current
+              </Text>
+            </TouchableOpacity>
+            {pastRounds.map(r => {
+              const active = r.id === selectedGwId;
+              return (
+                <TouchableOpacity
+                  key={r.id}
+                  style={[styles.gwTab, active && styles.gwTabActive]}
+                  onPress={() => setSelectedGwId(r.id)}
+                  activeOpacity={0.8}>
+                  <Text style={[styles.gwTabText, active && styles.gwTabTextActive]}>
+                    GW{r.round_number}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* ── History read-only banner ── */}
+      {isHistoryMode && (
+        <View style={styles.historyBanner}>
+          <Text style={styles.historyBannerText}>
+            Viewing GW{historyRound?.round_number} snapshot — read only
           </Text>
         </View>
       )}
 
-      {/* Team Status Message */}
-      {!isTeamValid() && selectedPlayers.length > 0 && (
+      {/* ── Locked banner (current mode only) ── */}
+      {!isHistoryMode && isLocked && currentRound && (
+        <View style={styles.lockedBanner}>
+          <Image source={Icons.locked} style={styles.lockedIcon} />
+          <Text style={styles.lockedText}>
+            Team Locked — Gameweek {currentRound.round_number} in progress
+          </Text>
+        </View>
+      )}
+
+      {/* ── Incomplete team warning (current mode only) ── */}
+      {!isHistoryMode && !isTeamValid() && selectedPlayers.length > 0 && (
         <View style={styles.warningBanner}>
           <Image source={Icons.warning} style={styles.warningIcon} />
           <View style={styles.warningContent}>
@@ -243,17 +386,22 @@ export default function MyTeamScreen({ navigation }) {
         </View>
       )}
 
-      {/* Pitch View */}
-      {enrichedPlayers.length > 0 ? (
+      {/* ── Pitch ── */}
+      {isHistoryMode && loadingHistory ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.oceanBright} />
+          <Text style={styles.loadingText}>Loading GW{historyRound?.round_number}…</Text>
+        </View>
+      ) : displayPlayers.length > 0 ? (
         <PitchView
-          players={enrichedPlayers}
-          captainId={captainId}
+          players={displayPlayers}
+          captainId={displayCaptainId}
           mode="pickTeam"
           onPlayerPress={handlePlayerPress}
           onEmptySlotPress={handleEmptySlotPress}
-          isLocked={isLocked}
+          isLocked={isHistoryMode || isLocked}
         />
-      ) : (
+      ) : !isHistoryMode ? (
         <ScrollView style={styles.emptyContainer} contentContainerStyle={styles.emptyContent}>
           <Image source={Icons.player} style={styles.emptyEmoji} />
           <Text style={styles.emptyTitle}>No Players Yet</Text>
@@ -263,30 +411,27 @@ export default function MyTeamScreen({ navigation }) {
           <TouchableOpacity
             style={styles.emptyButton}
             onPress={() => navigation.navigate('Players')}
-            activeOpacity={0.8}
-          >
+            activeOpacity={0.8}>
             <Image source={Icons.player} style={styles.emptyButtonIcon} />
             <Text style={styles.emptyButtonText}>Add Players</Text>
           </TouchableOpacity>
         </ScrollView>
-      )}
+      ) : null}
 
-      {/* Action Modal */}
+      {/* ── Player Action Modal ── */}
       <Modal
         animationType="slide"
         transparent={true}
         visible={modalVisible}
-        onRequestClose={handleCloseModal}
-      >
+        onRequestClose={handleCloseModal}>
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
-          onPress={handleCloseModal}
-        >
+          onPress={handleCloseModal}>
           <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
             {selectedPlayer && (
               <>
-                {/* Player Info Header */}
+                {/* Player info header */}
                 <View style={styles.modalHeader}>
                   <View style={styles.modalPlayerInfo}>
                     <Image
@@ -296,144 +441,147 @@ export default function MyTeamScreen({ navigation }) {
                     <View>
                       <Text style={styles.modalPlayerName}>{selectedPlayer.name}</Text>
                       <Text style={styles.modalPlayerDetails}>
-                        {selectedPlayer.team} • {selectedPlayer.position} • ${selectedPlayer.price.toFixed(1)}M
+                        {selectedPlayer.team} • {selectedPlayer.position}
+                        {!isHistoryMode && selectedPlayer.price
+                          ? ` • $${selectedPlayer.price.toFixed(1)}M`
+                          : ''}
                       </Text>
                     </View>
                   </View>
-                  {selectedPlayer.id === captainId && (
+                  {selectedPlayer.id === displayCaptainId && (
                     <View style={styles.modalCaptainBadge}>
                       <Text style={styles.modalCaptainText}>Captain</Text>
                     </View>
                   )}
                 </View>
 
-                {/* Action Buttons */}
-                <View style={styles.modalActions}>
-                  {/* Set as Captain (only for starters) */}
-                  {selectedPlayer.isStarter && selectedPlayer.id !== captainId && (
+                {isHistoryMode ? (
+                  /* History mode: show GW points only */
+                  <View style={styles.modalActions}>
+                    <View style={styles.historyPointsBox}>
+                      <Text style={styles.historyPointsLabel}>
+                        {selectedPlayer.id === historyCaptainId
+                          ? 'GW Points (C ×2)'
+                          : 'GW Points'}
+                      </Text>
+                      <Text style={styles.historyPointsValue}>
+                        {selectedPlayer.id === historyCaptainId
+                          ? (selectedPlayer.points || 0) * 2
+                          : (selectedPlayer.points || 0)}
+                      </Text>
+                      {selectedPlayer.id === historyCaptainId && (selectedPlayer.points || 0) > 0 && (
+                        <Text style={styles.historyPointsNote}>
+                          ({selectedPlayer.points} × 2)
+                        </Text>
+                      )}
+                      {!selectedPlayer.isStarter && (
+                        <Text style={styles.historyBenchNote}>Bench — did not count</Text>
+                      )}
+                    </View>
                     <TouchableOpacity
-                      style={[styles.modalButton, styles.modalButtonCaptain]}
-                      onPress={handleSetCaptain}
-                      activeOpacity={0.8}
-                    >
-                      <Image source={Icons.trophy} style={styles.modalButtonIcon} />
-                      <Text style={styles.modalButtonText}>Set as Captain</Text>
-                      <Text style={styles.modalButtonSubtext}>2× points</Text>
+                      style={[styles.modalButton, styles.modalButtonCancel]}
+                      onPress={handleCloseModal}
+                      activeOpacity={0.8}>
+                      <Text style={styles.modalButtonTextCancel}>Close</Text>
                     </TouchableOpacity>
-                  )}
-
-                  {/* Swap with Substitute / Swap with Starter */}
-                  {selectedPlayer.isStarter ? (
+                  </View>
+                ) : (
+                  /* Current mode: full edit actions */
+                  <View style={styles.modalActions}>
+                    {selectedPlayer.isStarter && selectedPlayer.id !== captainId && (
+                      <TouchableOpacity
+                        style={[styles.modalButton, styles.modalButtonCaptain]}
+                        onPress={handleSetCaptain}
+                        activeOpacity={0.8}>
+                        <Image source={Icons.trophy} style={styles.modalButtonIcon} />
+                        <Text style={styles.modalButtonText}>Set as Captain</Text>
+                        <Text style={styles.modalButtonSubtext}>2× points</Text>
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity
                       style={[styles.modalButton, styles.modalButtonSwap]}
                       onPress={handleShowSwapModal}
-                      activeOpacity={0.8}
-                    >
+                      activeOpacity={0.8}>
                       <Image source={Icons.swap} style={styles.modalButtonIcon} />
-                      <Text style={styles.modalButtonText}>Swap with Substitute</Text>
+                      <Text style={styles.modalButtonText}>
+                        {selectedPlayer.isStarter ? 'Swap with Substitute' : 'Swap with Starter'}
+                      </Text>
                     </TouchableOpacity>
-                  ) : (
+                    {!selectedPlayer.isStarter && selectedPlayer.position === 'Outfield' && (() => {
+                      const idx = sortedOutfieldSubs.findIndex(p => p.id === selectedPlayer.id);
+                      return (
+                        <View style={styles.reorderRow}>
+                          <TouchableOpacity
+                            style={[styles.reorderButton, idx <= 0 && styles.reorderButtonDisabled]}
+                            onPress={handleMoveSubUp}
+                            disabled={idx <= 0}
+                            activeOpacity={0.8}>
+                            <Text style={styles.reorderButtonIcon}>▲</Text>
+                            <Text style={styles.reorderButtonText}>Higher Priority</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.reorderButton,
+                              idx >= sortedOutfieldSubs.length - 1 && styles.reorderButtonDisabled,
+                            ]}
+                            onPress={handleMoveSubDown}
+                            disabled={idx >= sortedOutfieldSubs.length - 1}
+                            activeOpacity={0.8}>
+                            <Text style={styles.reorderButtonIcon}>▼</Text>
+                            <Text style={styles.reorderButtonText}>Lower Priority</Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })()}
                     <TouchableOpacity
-                      style={[styles.modalButton, styles.modalButtonSwap]}
-                      onPress={handleShowSwapModal}
-                      activeOpacity={0.8}
-                    >
-                      <Image source={Icons.swap} style={styles.modalButtonIcon} />
-                      <Text style={styles.modalButtonText}>Swap with Starter</Text>
+                      style={[styles.modalButton, styles.modalButtonCancel]}
+                      onPress={handleCloseModal}
+                      activeOpacity={0.8}>
+                      <Text style={styles.modalButtonTextCancel}>Cancel</Text>
                     </TouchableOpacity>
-                  )}
-
-                  {/* Reorder priority for outfield subs */}
-                  {!selectedPlayer.isStarter && selectedPlayer.position === 'Outfield' && (() => {
-                    const idx = sortedOutfieldSubs.findIndex(p => p.id === selectedPlayer.id);
-                    return (
-                      <View style={styles.reorderRow}>
-                        <TouchableOpacity
-                          style={[
-                            styles.reorderButton,
-                            idx <= 0 && styles.reorderButtonDisabled,
-                          ]}
-                          onPress={handleMoveSubUp}
-                          disabled={idx <= 0}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={styles.reorderButtonIcon}>▲</Text>
-                          <Text style={styles.reorderButtonText}>Higher Priority</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.reorderButton,
-                            idx >= sortedOutfieldSubs.length - 1 && styles.reorderButtonDisabled,
-                          ]}
-                          onPress={handleMoveSubDown}
-                          disabled={idx >= sortedOutfieldSubs.length - 1}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={styles.reorderButtonIcon}>▼</Text>
-                          <Text style={styles.reorderButtonText}>Lower Priority</Text>
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  })()}
-
-                  {/* Cancel Button */}
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.modalButtonCancel]}
-                    onPress={handleCloseModal}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.modalButtonTextCancel}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
+                  </View>
+                )}
               </>
             )}
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* Swap Selection Modal */}
+      {/* ── Swap Selection Modal (current mode only) ── */}
       <Modal
         animationType="slide"
         transparent={true}
-        visible={swapModalVisible}
-        onRequestClose={() => setSwapModalVisible(false)}
-      >
+        visible={swapModalVisible && !isHistoryMode}
+        onRequestClose={() => setSwapModalVisible(false)}>
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => {
             setSwapModalVisible(false);
             setSelectedPlayer(null);
-          }}
-        >
+          }}>
           <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
             {selectedPlayer && (
               <>
-                {/* Header */}
                 <View style={styles.swapModalHeader}>
-                  <Text style={styles.swapModalTitle}>
-                    Select player to swap with
-                  </Text>
+                  <Text style={styles.swapModalTitle}>Select player to swap with</Text>
                   <Text style={styles.swapModalSubtitle}>
                     {selectedPlayer.name} ({selectedPlayer.position})
                   </Text>
                 </View>
-
-                {/* List of eligible swap candidates */}
                 <ScrollView style={styles.swapPlayersList}>
                   {enrichedPlayers
-                    .filter(p => 
-                      p.id !== selectedPlayer.id && // Not the same player
-                      p.position === selectedPlayer.position && // Same position
-                      p.isStarter !== selectedPlayer.isStarter // Different starter status
+                    .filter(p =>
+                      p.id !== selectedPlayer.id &&
+                      p.position === selectedPlayer.position &&
+                      p.isStarter !== selectedPlayer.isStarter
                     )
                     .map(player => (
                       <TouchableOpacity
                         key={player.id}
                         style={styles.swapPlayerCard}
                         onPress={() => handleSwapWithPlayer(player.id)}
-                        activeOpacity={0.7}
-                      >
+                        activeOpacity={0.7}>
                         <View style={styles.swapPlayerInfo}>
                           <Image
                             source={player.position === 'GK' ? Icons.goalie : Icons.player}
@@ -448,19 +596,15 @@ export default function MyTeamScreen({ navigation }) {
                         </View>
                         <Text style={styles.swapPlayerArrow}>→</Text>
                       </TouchableOpacity>
-                    ))
-                  }
+                    ))}
                 </ScrollView>
-
-                {/* Cancel Button */}
                 <TouchableOpacity
                   style={[styles.modalButton, styles.modalButtonCancel]}
                   onPress={() => {
                     setSwapModalVisible(false);
                     setSelectedPlayer(null);
                   }}
-                  activeOpacity={0.8}
-                >
+                  activeOpacity={0.8}>
                   <Text style={styles.modalButtonTextCancel}>Cancel</Text>
                 </TouchableOpacity>
               </>
@@ -478,6 +622,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.backgroundLight,
   },
+
+  // ── Header ──
   header: {
     backgroundColor: colors.oceanDeep,
     paddingTop: 60,
@@ -550,6 +696,103 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: '600',
   },
+
+  // ── History mode header score ──
+  historyScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  historyScoreBlock: {
+    alignItems: 'center',
+  },
+  historyScoreLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.oceanBright,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  historyScoreValue: {
+    fontSize: 44,
+    fontWeight: 'bold',
+    color: colors.sand,
+  },
+  historyScoreUnit: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '600',
+    marginTop: -4,
+  },
+  historyScoreDivider: {
+    width: 1,
+    height: 52,
+    backgroundColor: colors.sand + '30',
+  },
+  historyScoreHit: {
+    color: colors.coral,
+    fontSize: 36,
+  },
+  historyScoreNet: {
+    color: '#4ADE80',
+    fontSize: 36,
+  },
+
+  // ── GW Picker bar ──
+  gwPickerWrapper: {
+    backgroundColor: colors.oceanMedium,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.oceanBright + '30',
+  },
+  gwPickerScroll: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  gwTab: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.round,
+    borderWidth: 1,
+    borderColor: colors.oceanBright + '50',
+    marginRight: spacing.xs,
+  },
+  gwTabActive: {
+    backgroundColor: colors.sand,
+    borderColor: colors.sand,
+  },
+  gwTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.oceanBright,
+    letterSpacing: 0.3,
+  },
+  gwTabTextActive: {
+    color: colors.oceanDeep,
+  },
+
+  // ── History banner ──
+  historyBanner: {
+    backgroundColor: colors.oceanMedium + '30',
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.medium,
+    borderWidth: 1,
+    borderColor: colors.oceanBright + '40',
+    alignItems: 'center',
+  },
+  historyBannerText: {
+    fontSize: 12,
+    color: colors.oceanMedium,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+
+  // ── Locked / warning banners ──
   lockedBanner: {
     backgroundColor: colors.coral + '18',
     marginHorizontal: spacing.md,
@@ -604,6 +847,22 @@ const styles = StyleSheet.create({
     color: colors.textMedium,
     fontWeight: '600',
   },
+
+  // ── Loading ──
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+
+  // ── Empty state ──
   emptyContainer: {
     flex: 1,
   },
@@ -652,7 +911,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  // Modal Styles
+
+  // ── Modals ──
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -758,7 +1018,42 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     flex: 1,
   },
-  // Swap Modal Styles
+
+  // ── History mode player modal ──
+  historyPointsBox: {
+    backgroundColor: colors.oceanDeep,
+    borderRadius: borderRadius.large,
+    padding: spacing.lg,
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  historyPointsLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.oceanBright,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  historyPointsValue: {
+    fontSize: 56,
+    fontWeight: 'bold',
+    color: colors.sand,
+  },
+  historyPointsNote: {
+    fontSize: 13,
+    color: colors.textMuted,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  historyBenchNote: {
+    fontSize: 12,
+    color: colors.coral,
+    fontWeight: '600',
+    marginTop: spacing.sm,
+  },
+
+  // ── Swap modal ──
   swapModalHeader: {
     alignItems: 'center',
     marginBottom: spacing.md,
@@ -820,45 +1115,8 @@ const styles = StyleSheet.create({
     color: colors.oceanMedium,
     fontWeight: 'bold',
   },
-  // Bottom Bar
-  bottomBar: {
-    backgroundColor: colors.pearl,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    paddingBottom: spacing.md + 20,
-    flexDirection: 'row',
-    gap: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.oceanBright + '20',
-    ...shadows.large,
-  },
-  bottomButton: {
-    flex: 1,
-    backgroundColor: colors.oceanMedium,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.medium,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    ...shadows.small,
-  },
-  bottomButtonSecondary: {
-    backgroundColor: colors.oceanBright + '30',
-    borderWidth: 2,
-    borderColor: colors.oceanMedium,
-  },
-  bottomButtonDisabled: {
-    opacity: 0.5,
-  },
-  bottomButtonIcon: {
-    fontSize: 16,
-  },
-  bottomButtonText: {
-    color: colors.white,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
+
+  // ── Sub reorder buttons ──
   reorderRow: {
     flexDirection: 'row',
     gap: spacing.sm,

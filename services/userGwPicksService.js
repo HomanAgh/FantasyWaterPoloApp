@@ -128,6 +128,32 @@ export const getSnapshotRoundIds = async (userId) => {
 };
 
 /**
+ * Fetch the transfer point deduction recorded for a specific past round.
+ * Returns 0 if no deduction row exists (free transfer used or no transfers made).
+ *
+ * @param {string} userId
+ * @param {string} roundId
+ * @returns {Promise<number>}
+ */
+export const getDeductionForRound = async (userId, roundId) => {
+  try {
+    const { data, error } = await supabase
+      .from('user_round_deductions')
+      .select('deduction')
+      .eq('user_id', userId)
+      .eq('round_id', roundId)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    return data?.deduction ?? 0;
+  } catch (error) {
+    console.error('Error fetching deduction for round:', error);
+    return 0;
+  }
+};
+
+/**
  * Sum the locked scores from every gameweek snapshot for this user.
  * Each past GW score is calculated from the snapshot taken at that GW's deadline,
  * so it is never affected by later transfers.

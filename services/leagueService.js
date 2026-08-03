@@ -9,9 +9,7 @@ import supabase from '../config/supabaseClient';
 export async function fetchGlobalLeaderboard(limit = 50, offset = 0) {
   try {
     const { data, error } = await supabase
-      .from('global_leaderboard')
-      .select('*')
-      .range(offset, offset + limit - 1);
+      .rpc('get_global_leaderboard', { limit_count: limit, offset_count: offset });
 
     if (error) throw error;
 
@@ -61,25 +59,26 @@ export async function getLeaderboardAroundUser(userId, context = 2) {
   try {
     // First get user's rank
     const { rank, error: rankError } = await getUserGlobalRank(userId);
-    
+
     if (rankError || !rank) {
       return { data: null, error: rankError };
     }
 
-    // Calculate range
-    const start = Math.max(1, rank - context);
-    const end = rank + context;
+    // Fetch a window of entries centred around the user's rank
+    const startOffset = Math.max(0, rank - context - 1);
+    const fetchCount = context * 2 + 1;
 
-    // Fetch entries in that range
     const { data, error } = await supabase
-      .from('global_leaderboard')
-      .select('*')
-      .gte('rank', start)
-      .lte('rank', end);
+      .rpc('get_global_leaderboard', { limit_count: fetchCount, offset_count: startOffset });
 
     if (error) throw error;
 
-    return { data: data || [], error: null };
+    // Trim to the exact rank window in case the offset lands slightly off
+    const rangeStart = Math.max(1, rank - context);
+    const rangeEnd = rank + context;
+    const filtered = (data || []).filter(e => e.rank >= rangeStart && e.rank <= rangeEnd);
+
+    return { data: filtered, error: null };
   } catch (error) {
     console.error('Error fetching leaderboard around user:', error);
     return { data: null, error };

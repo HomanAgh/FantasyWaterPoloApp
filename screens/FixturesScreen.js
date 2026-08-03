@@ -179,8 +179,11 @@ export default function FixturesScreen() {
               styles.statusBadge,
               { backgroundColor: statusStyle.backgroundColor },
             ]}>
+            {fixture.status === 'scheduled' && (
+              <Image source={Icons.calendar} style={styles.statusIcon} />
+            )}
             <Text style={[styles.statusText, { color: statusStyle.color }]}>
-              {statusStyle.emoji} {statusStyle.label}
+              {fixture.status !== 'scheduled' ? `${statusStyle.emoji} ` : ''}{statusStyle.label}
             </Text>
           </View>
         </View>
@@ -320,7 +323,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.medium,
     ...shadows.medium,
     borderWidth: 2,
-    borderColor: colors.oceanBright + '40',
+    borderColor: colors.sand + '50',
   },
   roundTab: {
     paddingHorizontal: spacing.md,
@@ -329,7 +332,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.medium,
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.oceanBright + '40',
+    borderColor: colors.sand + '40',
   },
   roundTabActive: {
     backgroundColor: colors.oceanMedium,
@@ -368,9 +371,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     ...shadows.medium,
     borderWidth: 1,
-    borderColor: colors.oceanBright + '20',
+    borderColor: colors.sand + '50',
     borderLeftWidth: 4,
-    borderLeftColor: colors.oceanMedium,
+    borderLeftColor: colors.sand,
   },
   matchHeader: {
     marginBottom: spacing.md,
@@ -426,7 +429,15 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.medium,
     borderWidth: 1,
-    borderColor: colors.oceanBright + '40',
+    borderColor: colors.sand + '50',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statusIcon: {
+    width: 12,
+    height: 12,
+    resizeMode: 'contain',
   },
   statusText: {
     fontSize: 12,
@@ -545,8 +556,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.medium,
     ...shadows.small,
+    borderWidth: 1,
+    borderColor: colors.sand + '50',
     borderLeftWidth: 4,
-    borderLeftColor: colors.oceanMedium,
+    borderLeftColor: colors.sand,
   },
   roundInfoContent: {
     alignItems: 'center',
