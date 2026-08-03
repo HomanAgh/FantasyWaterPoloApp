@@ -4,12 +4,33 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar, Image } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Sentry from '@sentry/react-native';
 import { colors } from './styles/theme';
 import { Icons } from './assets/images/icons';
 import { RoundProvider } from './context/RoundContext';
 import { TeamProvider, useTeam } from './context/TeamContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import * as userProfileService from './services/userProfileService';
+
+let sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (!sentryDsn) {
+  try {
+    const { SENTRY_CONFIG } = require('./config/sentryConfig');
+    sentryDsn = SENTRY_CONFIG.dsn;
+  } catch {
+    // sentryConfig.js not present — Sentry will be disabled
+  }
+}
+
+Sentry.init({
+  dsn: sentryDsn,
+  // Set tracesSampleRate to 1.0 to capture 100% of transactions.
+  // Reduce in production (e.g. 0.2) once you have baseline data.
+  tracesSampleRate: 1.0,
+  // Uncomment to enable Sentry's performance monitoring breadcrumbs:
+  // enableTracing: true,
+  enabled: !!sentryDsn && sentryDsn !== 'YOUR_SENTRY_DSN_HERE',
+});
 
 // Import screens
 import HomeScreen from './screens/HomeScreen';
@@ -22,6 +43,7 @@ import OnboardingScreen from './screens/OnboardingScreen';
 import AuthScreen from './screens/AuthScreen';
 import LoadingScreen from './components/LoadingScreen';
 import PlayerDetailScreen from './screens/PlayerDetailScreen';
+import GWHistoryScreen from './screens/GWHistoryScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -179,11 +201,16 @@ function AppContent() {
         component={PlayerDetailScreen}
         options={{ headerShown: false }}
       />
+      <Stack.Screen
+        name="GWHistory"
+        component={GWHistoryScreen}
+        options={{ headerShown: false }}
+      />
     </Stack.Navigator>
   );
 }
 
-export default function App() {
+export default Sentry.wrap(function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
@@ -198,4 +225,4 @@ export default function App() {
       </AuthProvider>
     </SafeAreaProvider>
   );
-}
+});

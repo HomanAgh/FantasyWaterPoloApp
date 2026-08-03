@@ -77,6 +77,10 @@ yarn-error.log
 # Supabase
 config/supabaseConfig.js
 
+# Sentry
+config/sentryConfig.js
+android/sentry.properties
+
 
 # Expo
 .expo
