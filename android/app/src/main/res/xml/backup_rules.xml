@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- 
+        Include AsyncStorage data in backups.
+        This ensures user data persists when the app is killed or device is restarted.
+    -->
+    <include domain="sharedpref" path="." />
+    <include domain="database" path="." />
+    
+    <!-- 
+        Exclude sensitive or cache data that shouldn't be backed up
+    -->
+    <exclude domain="sharedpref" path="dev-menu.xml" />
+</full-backup-content>

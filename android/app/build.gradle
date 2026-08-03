@@ -1,6 +1,8 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
+apply plugin: "io.sentry.android.gradle"
+apply from: "../../node_modules/@sentry/react-native/sentry.gradle"
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -52,6 +54,16 @@ react {
 
     /* Autolinking */
     autolinkLibrariesWithApp()
+}
+
+sentry {
+    // Must be false: @sentry/react-native manages its own sentry-android dependency.
+    // Enabling auto-installation causes an "IllegalStateException: mix of versions" crash.
+    autoInstallation {
+        enabled = false
+    }
+    uploadNativeSymbols = false
+    includeNativeSources = false
 }
 
 /**
@@ -115,5 +127,16 @@ dependencies {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
+    }
+}
+
+// Fix task dependencies for bundling
+afterEvaluate {
+    def bundleReleaseJsAndAssets = tasks.findByName("createBundleReleaseJsAndAssets")
+    if (bundleReleaseJsAndAssets) {
+        bundleReleaseJsAndAssets.dependsOn("generateReactNativeEntryPoint")
+        bundleReleaseJsAndAssets.dependsOn("generateAutolinkingPackageList")
+        bundleReleaseJsAndAssets.dependsOn("generateAutolinkingNewArchitectureFiles")
+        bundleReleaseJsAndAssets.dependsOn("generateReleaseBuildConfig")
     }
 }
