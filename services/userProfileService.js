@@ -98,3 +98,22 @@ export const checkIfProfileExists = async (userId) => {
     return false;
   }
 };
+
+/**
+ * Report another user's team name as offensive.
+ * Creates an open row in team_name_reports for manual admin review.
+ * @param {string} reportedUserId
+ * @returns {Promise<{data: 'reported'|null, error: Error|null}>}
+ */
+export const reportTeamName = async (reportedUserId) => {
+  try {
+    const { data, error } = await supabase
+      .rpc('report_team_name', { target_user_id: reportedUserId });
+
+    if (error) throw error;
+    return { data: data || null, error: null };
+  } catch (error) {
+    console.error('Error reporting team name:', error);
+    return { data: null, error };
+  }
+};

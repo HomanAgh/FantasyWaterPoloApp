@@ -144,7 +144,10 @@ export default function HomeScreen({ navigation }) {
 
         {/* GW points row */}
         <View style={styles.pointsRow}>
-          <View style={styles.pointsBlock}>
+          <TouchableOpacity
+            style={styles.pointsBlock}
+            onPress={() => navigation.navigate('MyTeam')}
+            activeOpacity={0.7}>
             <Text style={styles.pointsLabel}>
               {isLocked ? 'GW Live' : `GW ${currentRound?.round_number || 1}`}
             </Text>
@@ -155,7 +158,8 @@ export default function HomeScreen({ navigation }) {
             {isLocked && (
               <Text style={styles.liveIndicator}>● LIVE</Text>
             )}
-          </View>
+            <Text style={styles.historyHint}>tap to view team</Text>
+          </TouchableOpacity>
 
           <View style={styles.pointsDivider} />
 
@@ -225,6 +229,7 @@ export default function HomeScreen({ navigation }) {
           style={styles.button}
           onPress={() => navigation.navigate('MyTeam')}
           activeOpacity={0.8}>
+          <Image source={Icons.swimmer} style={styles.actionButtonIcon} />
           <Text style={styles.buttonText}>View Team</Text>
         </TouchableOpacity>
       </View>
@@ -479,6 +484,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.oceanMedium,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
@@ -616,6 +624,13 @@ const styles = StyleSheet.create({
     color: colors.coral,
     marginTop: spacing.sm,
     letterSpacing: 2,
+  },
+  historyHint: {
+    fontSize: 10,
+    color: colors.oceanBright,
+    fontWeight: '600',
+    marginTop: spacing.xs,
+    letterSpacing: 0.3,
   },
   fixtureRow: {
     flexDirection: 'row',

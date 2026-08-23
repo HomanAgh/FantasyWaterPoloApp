@@ -5,6 +5,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar, Image } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Sentry from '@sentry/react-native';
+import {
+  useFonts,
+  BarlowCondensed_400Regular,
+  BarlowCondensed_800ExtraBold_Italic,
+} from '@expo-google-fonts/barlow-condensed';
 import { colors } from './styles/theme';
 import { Icons } from './assets/images/icons';
 import { RoundProvider } from './context/RoundContext';
@@ -41,9 +46,11 @@ import TransfersScreen from './screens/TransfersScreen';
 import FixturesScreen from './screens/FixturesScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import AuthScreen from './screens/AuthScreen';
+import ProfileScreen from './screens/ProfileScreen';
 import LoadingScreen from './components/LoadingScreen';
 import PlayerDetailScreen from './screens/PlayerDetailScreen';
 import GWHistoryScreen from './screens/GWHistoryScreen';
+import LeagueDetailScreen from './screens/LeagueDetailScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -121,6 +128,14 @@ function MainTabs() {
         options={{
           title: 'Leagues',
           tabBarIcon: ({ focused }) => <Image source={Icons.trophy} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
+        }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ focused }) => <Image source={Icons.badge} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
         }}
       />
     </Tab.Navigator>
@@ -206,11 +221,29 @@ function AppContent() {
         component={GWHistoryScreen}
         options={{ headerShown: false }}
       />
+      <Stack.Screen
+        name="LeagueDetail"
+        component={LeagueDetailScreen}
+        options={{ headerShown: false }}
+      />
     </Stack.Navigator>
   );
 }
 
 export default Sentry.wrap(function App() {
+  const [fontsLoaded] = useFonts({
+    BarlowCondensed_400Regular,
+    BarlowCondensed_800ExtraBold_Italic,
+  });
+
+  if (!fontsLoaded) {
+    return (
+      <SafeAreaProvider>
+        <LoadingScreen />
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <AuthProvider>

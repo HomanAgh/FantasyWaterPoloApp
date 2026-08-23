@@ -42,6 +42,18 @@ export const colors = {
     starterZone: 'rgba(255, 193, 7, 0.12)',
     benchZone: 'rgba(74, 159, 212, 0.08)',
   },
+
+  // Auth screen — dark neon glass (Figma)
+  auth: {
+    background: '#020B18',
+    neon: '#00AEEF',
+    neonSoft: 'rgba(0, 174, 239, 0.35)',
+    glass: 'rgba(8, 24, 48, 0.72)',
+    inputBg: 'rgba(4, 16, 32, 0.85)',
+    placeholder: '#7A8C9E',
+    buttonTop: '#1E9FE8',
+    buttonBottom: '#0B6BB5',
+  },
 };
 
 export const spacing = {
@@ -109,6 +121,12 @@ export const borderRadius = {
   large: 16,
   xl: 24,
   round: 999,
+};
+
+// Custom fonts — load in App.js before first render (see @expo-google-fonts/barlow-condensed)
+export const fonts = {
+  barlowCondensedRegular: 'BarlowCondensed_400Regular',
+  barlowCondensedExtraBoldItalic: 'BarlowCondensed_800ExtraBold_Italic',
 };
 
 

@@ -11,31 +11,51 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
+  ImageBackground,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
-import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { useAuth } from '../context/AuthContext';
 
+// Drop Figma exports into assets/images/, then set these requires:
+//   auth-bg.png    — full-bleed water/player background
+//   auth-title.png — logo + "FANTASY WATER POLO" + yellow ribbon (transparent PNG)
+const AUTH_BG = null; // require('../assets/images/auth-bg.png')
+const AUTH_TITLE = null; // require('../assets/images/auth-title.png')
+
 const AuthScreen = ({ onNewUser }) => {
-  const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState('login'); // 'login' | 'signup'
+  const { signIn, signUp, resetPassword } = useAuth();
+  const [mode, setMode] = useState('login'); // 'login' | 'signup' | 'forgot'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const resetForm = () => {
     setEmail('');
     setPassword('');
     setConfirmPassword('');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
   const switchMode = (newMode) => {
+    // Keep email when entering/leaving forgot so users don't retype it
+    if (newMode === 'forgot' || mode === 'forgot') {
+      setPassword('');
+      setConfirmPassword('');
+      setShowPassword(false);
+      setShowConfirmPassword(false);
+      setMode(newMode);
+      return;
+    }
     resetForm();
     setMode(newMode);
   };
 
-  const validateInputs = () => {
+  const validateEmail = () => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       Alert.alert('Missing Email', 'Please enter your email address.');
@@ -46,8 +66,13 @@ const AuthScreen = ({ onNewUser }) => {
       Alert.alert('Invalid Email', 'Please enter a valid email address.');
       return false;
     }
-    if (password.length < 6) {
-      Alert.alert('Weak Password', 'Password must be at least 6 characters.');
+    return true;
+  };
+
+  const validateInputs = () => {
+    if (!validateEmail()) return false;
+    if (password.length < 8) {
+      Alert.alert('Weak Password', 'Password must be at least 8 characters.');
       return false;
     }
     if (mode === 'signup' && password !== confirmPassword) {
@@ -111,285 +136,406 @@ const AuthScreen = ({ onNewUser }) => {
     }
   };
 
-  return (
+  const handleForgotPassword = async () => {
+    if (!validateEmail()) return;
+    setIsLoading(true);
+    try {
+      const { error } = await resetPassword(email.trim());
+      if (error) {
+        Alert.alert('Reset Failed', error.message);
+        return;
+      }
+      Alert.alert(
+        'Check Your Email',
+        'If an account exists for that email, we sent a password reset link. Open it in your browser, set a new password, then come back and sign in.'
+      );
+      switchMode('login');
+    } catch (err) {
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const primaryAction =
+    mode === 'login' ? handleLogin : mode === 'signup' ? handleSignUp : handleForgotPassword;
+
+  const primaryLabel =
+    mode === 'login' ? 'SIGN IN' : mode === 'signup' ? 'CREATE ACCOUNT' : 'SEND RESET LINK';
+
+  const renderHero = () => {
+    if (AUTH_TITLE) {
+      return (
+        <Image source={AUTH_TITLE} style={styles.titleImage} resizeMode="contain" />
+      );
+    }
+
+    // Temporary fallback until Figma title PNG is dropped in
+    return (
+      <View style={styles.heroFallback}>
+        <Text style={styles.welcomeChip}>WELCOME TO</Text>
+        <Text style={styles.appTitle}>FANTASY{'\n'}WATER POLO</Text>
+        <View style={styles.ribbon}>
+          <Text style={styles.ribbonText}>DIVE INTO ACTION</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const content = (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Decorative background waves */}
-      <View style={styles.bgWaves}>
-        <Image source={Icons.wave} style={styles.waveTop} />
-        <Image source={Icons.wave} style={styles.waveBottom} />
-      </View>
-
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Image source={Icons.player} style={styles.icon} />
-          <Text style={styles.welcomeText}>Welcome to</Text>
-          <Text style={styles.appTitle}>Fantasy Water Polo</Text>
-          <View style={styles.subtitleRow}>
-            <Text style={styles.subtitle}>Dive into the action!</Text>
-            <Image source={Icons.water} style={styles.subtitleIcon} />
+        <View style={styles.hero}>{renderHero()}</View>
+
+        {mode !== 'forgot' && (
+          <View style={styles.tabs}>
+            <TouchableOpacity
+              style={[styles.tab, mode === 'login' && styles.tabActive]}
+              onPress={() => switchMode('login')}
+              disabled={isLoading}
+            >
+              <Text style={[styles.tabText, mode === 'login' && styles.tabTextActive]}>
+                LOG IN
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, mode === 'signup' && styles.tabActive]}
+              onPress={() => switchMode('signup')}
+              disabled={isLoading}
+            >
+              <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>
+                CREATE ACCOUNT
+              </Text>
+            </TouchableOpacity>
           </View>
-        </View>
+        )}
 
-        {/* Mode tabs */}
-        <View style={styles.tabs}>
-          <TouchableOpacity
-            style={[styles.tab, mode === 'login' && styles.tabActive]}
-            onPress={() => switchMode('login')}
-            disabled={isLoading}
-          >
-            <Text style={[styles.tabText, mode === 'login' && styles.tabTextActive]}>
-              Sign In
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, mode === 'signup' && styles.tabActive]}
-            onPress={() => switchMode('signup')}
-            disabled={isLoading}
-          >
-            <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>
-              Create Account
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Form card */}
         <View style={styles.card}>
-          <Text style={styles.fieldLabel}>Email</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="your@email.com"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoComplete="email"
-            editable={!isLoading}
-          />
+          {mode === 'forgot' && (
+            <Text style={styles.helperText}>
+              Enter your account email. Open the link in your browser to set a new password, then return here to sign in.
+            </Text>
+          )}
 
-          <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>Password</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="At least 6 characters"
-            placeholderTextColor={colors.textMuted}
-            secureTextEntry
-            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-            editable={!isLoading}
-          />
+          <Text style={styles.fieldLabel}>Email</Text>
+          <View style={styles.inputRow}>
+            <Image source={Icons.letter} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="your@email.com"
+              placeholderTextColor={colors.auth.placeholder}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+              editable={!isLoading}
+            />
+          </View>
+
+          {mode !== 'forgot' && (
+            <>
+              <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Password</Text>
+              <View style={styles.inputRow}>
+                <Image source={Icons.locked} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="At least 8 characters"
+                  placeholderTextColor={colors.auth.placeholder}
+                  secureTextEntry={!showPassword}
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                  editable={!isLoading}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((v) => !v)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  disabled={isLoading}
+                >
+                  <Image
+                    source={Icons.eye}
+                    style={[styles.eyeIcon, showPassword && styles.eyeIconActive]}
+                  />
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+
+          {mode === 'login' && (
+            <TouchableOpacity
+              onPress={() => switchMode('forgot')}
+              disabled={isLoading}
+              style={styles.forgotLink}
+            >
+              <Text style={styles.forgotLinkText}>Forgot password?</Text>
+            </TouchableOpacity>
+          )}
 
           {mode === 'signup' && (
             <>
-              <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>Confirm Password</Text>
-              <TextInput
-                style={styles.input}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="Re-enter your password"
-                placeholderTextColor={colors.textMuted}
-                secureTextEntry
-                autoComplete="new-password"
-                editable={!isLoading}
-              />
+              <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Confirm Password</Text>
+              <View style={styles.inputRow}>
+                <Image source={Icons.locked} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Re-enter your password"
+                  placeholderTextColor={colors.auth.placeholder}
+                  secureTextEntry={!showConfirmPassword}
+                  autoComplete="new-password"
+                  editable={!isLoading}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword((v) => !v)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  disabled={isLoading}
+                >
+                  <Image
+                    source={Icons.eye}
+                    style={[styles.eyeIcon, showConfirmPassword && styles.eyeIconActive]}
+                  />
+                </TouchableOpacity>
+              </View>
             </>
           )}
         </View>
 
-        {/* Primary action button */}
         <TouchableOpacity
           style={[styles.button, isLoading && styles.buttonDisabled]}
-          onPress={mode === 'login' ? handleLogin : handleSignUp}
+          onPress={primaryAction}
           disabled={isLoading}
         >
           {isLoading ? (
             <ActivityIndicator color={colors.white} />
           ) : (
-            <Text style={styles.buttonText}>
-              {mode === 'login' ? 'Sign In' : 'Create Account'}
-            </Text>
+            <Text style={styles.buttonText}>{primaryLabel}</Text>
           )}
         </TouchableOpacity>
 
-        {/* Switch mode link */}
-        <TouchableOpacity
-          onPress={() => switchMode(mode === 'login' ? 'signup' : 'login')}
-          disabled={isLoading}
-          style={styles.switchLink}
-        >
-          <Text style={styles.switchLinkText}>
-            {mode === 'login'
-              ? "Don't have an account? Create one"
-              : 'Already have an account? Sign in'}
-          </Text>
-        </TouchableOpacity>
+        {mode === 'forgot' && (
+          <TouchableOpacity
+            onPress={() => switchMode('login')}
+            disabled={isLoading}
+            style={styles.switchLink}
+          >
+            <Text style={styles.switchLinkText}>Back to Sign In</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
+
+  if (AUTH_BG) {
+    return (
+      <ImageBackground source={AUTH_BG} style={styles.container} resizeMode="cover">
+        <View style={styles.scrim}>{content}</View>
+      </ImageBackground>
+    );
+  }
+
+  return <View style={[styles.container, styles.fallbackBg]}>{content}</View>;
 };
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
   },
-  bgWaves: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    overflow: 'hidden',
+  fallbackBg: {
+    backgroundColor: colors.auth.background,
   },
-  waveTop: {
-    position: 'absolute',
-    top: -20,
-    right: -20,
-    width: 150,
-    height: 150,
-    opacity: 0.1,
-    resizeMode: 'contain',
-    transform: [{ rotate: '45deg' }],
-  },
-  waveBottom: {
-    position: 'absolute',
-    bottom: -20,
-    left: -20,
-    width: 150,
-    height: 150,
-    opacity: 0.1,
-    resizeMode: 'contain',
-    transform: [{ rotate: '-45deg' }],
+  scrim: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 11, 24, 0.35)',
   },
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xxl,
+    paddingVertical: spacing.xl,
   },
-  header: {
+  hero: {
+    width: '100%',
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
-  icon: {
-    width: 80,
-    height: 80,
+  titleImage: {
+    width: '100%',
+    height: 180,
+  },
+  heroFallback: {
+    alignItems: 'center',
+    paddingTop: spacing.md,
+  },
+  welcomeChip: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: colors.white,
+    backgroundColor: colors.auth.buttonBottom,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    overflow: 'hidden',
     marginBottom: spacing.sm,
-    resizeMode: 'contain',
-  },
-  welcomeText: {
-    fontSize: 18,
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
   },
   appTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.oceanDeep,
+    fontSize: 34,
+    fontWeight: '900',
+    fontStyle: 'italic',
+    color: colors.white,
     textAlign: 'center',
-    marginBottom: spacing.sm,
+    lineHeight: 38,
+    letterSpacing: 1,
+    textShadowColor: colors.auth.neon,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
-  subtitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+  ribbon: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.sand,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 6,
+    transform: [{ rotate: '-2deg' }],
   },
-  subtitle: {
-    fontSize: 15,
-    color: colors.oceanMedium,
-    fontWeight: '600',
-  },
-  subtitleIcon: {
-    width: 15,
-    height: 15,
-    resizeMode: 'contain',
+  ribbonText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: colors.oceanDeep,
   },
   tabs: {
     flexDirection: 'row',
     width: '100%',
-    backgroundColor: colors.pearl,
-    borderRadius: borderRadius.large,
-    padding: 4,
-    marginBottom: spacing.lg,
-    ...shadows.small,
+    borderRadius: borderRadius.round,
+    borderWidth: 1.5,
+    borderColor: colors.auth.neon,
+    marginBottom: spacing.md,
+    overflow: 'hidden',
   },
   tab: {
     flex: 1,
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.sm + 4,
     alignItems: 'center',
-    borderRadius: borderRadius.medium,
+    backgroundColor: 'transparent',
   },
   tabActive: {
-    backgroundColor: colors.oceanMedium,
+    backgroundColor: colors.oceanDeep,
   },
   tabText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textMuted,
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 16,
+    letterSpacing: 0.5,
+    color: colors.white,
   },
   tabTextActive: {
     color: colors.white,
   },
   card: {
     width: '100%',
-    backgroundColor: colors.pearl,
+    backgroundColor: colors.auth.glass,
     borderRadius: borderRadius.large,
     padding: spacing.lg,
     marginBottom: spacing.lg,
-    ...shadows.medium,
-    borderWidth: 2,
-    borderColor: colors.oceanBright + '30',
+    borderWidth: 1.5,
+    borderColor: colors.auth.neon,
   },
   fieldLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.oceanDeep,
+    color: colors.white,
     marginBottom: spacing.xs,
   },
-  input: {
-    backgroundColor: colors.backgroundLight,
+  fieldLabelSpaced: {
+    marginTop: spacing.md,
+  },
+  helperText: {
+    fontSize: 14,
+    color: colors.auth.placeholder,
+    lineHeight: 20,
+    marginBottom: spacing.md,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.auth.inputBg,
     borderRadius: borderRadius.medium,
+    borderWidth: 1.5,
+    borderColor: colors.auth.neon,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 4,
+    minHeight: 48,
+  },
+  inputIcon: {
+    width: 18,
+    height: 18,
+    marginRight: spacing.sm,
+    resizeMode: 'contain',
+    tintColor: colors.auth.neon,
+  },
+  input: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 16,
-    color: colors.textDark,
-    borderWidth: 2,
-    borderColor: colors.oceanMedium,
+    color: colors.white,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
+  },
+  eyeIcon: {
+    width: 20,
+    height: 20,
+    marginLeft: spacing.sm,
+    resizeMode: 'contain',
+    tintColor: colors.white,
+    opacity: 0.7,
+  },
+  eyeIconActive: {
+    opacity: 1,
+  },
+  forgotLink: {
+    alignSelf: 'flex-end',
+    marginTop: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  forgotLinkText: {
+    color: colors.auth.neon,
+    fontSize: 13,
+    fontWeight: '600',
   },
   button: {
     width: '100%',
-    backgroundColor: colors.oceanMedium,
-    borderRadius: borderRadius.large,
-    paddingVertical: spacing.md + 2,
+    backgroundColor: colors.auth.buttonTop,
+    borderRadius: borderRadius.round,
+    paddingVertical: spacing.md + 4,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.large,
-    borderWidth: 3,
-    borderColor: colors.oceanDeep,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
     color: colors.white,
-    fontSize: 17,
-    fontWeight: 'bold',
+    fontSize: 24,
+    letterSpacing: 1,
   },
   switchLink: {
     marginTop: spacing.lg,
     paddingVertical: spacing.sm,
   },
   switchLinkText: {
-    color: colors.oceanMedium,
+    color: colors.auth.neon,
     fontSize: 14,
     fontWeight: '600',
     textDecorationLine: 'underline',

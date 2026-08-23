@@ -22,4 +22,6 @@ export const Icons = {
   house:      require('./003-house-1.png'),
   swimmer:    require('./029-swim.png'),
   badge:      require('./018-badge.png'),
+  eye:        require('./eye.png'),
+  letter:     require('./letter.png'),
 };
