@@ -72,13 +72,13 @@ export const updateTeamName = async (userId, teamName) => {
 };
 
 /**
- * Check if a user profile exists
+ * Check if a user profile exists.
+ * Returns `{ data: boolean, error }` — never treats API failure as "no profile".
  * @param {string} userId - User ID
- * @returns {Promise<boolean>}
+ * @returns {Promise<{data: boolean|null, error: Error|null}>}
  */
 export const checkIfProfileExists = async (userId) => {
   try {
-    console.log('[checkIfProfileExists] Checking for userId:', userId);
     const { data, error } = await supabase
       .from('user_profiles')
       .select('id')
@@ -86,16 +86,14 @@ export const checkIfProfileExists = async (userId) => {
       .maybeSingle();
 
     if (error) {
-      console.error('[checkIfProfileExists] Supabase error:', error);
-      throw error;
+      console.warn('[checkIfProfileExists] Supabase error:', error.message || error);
+      return { data: null, error };
     }
-    
-    const exists = data !== null;
-    console.log('[checkIfProfileExists] Profile exists:', exists, 'data:', data);
-    return exists;
+
+    return { data: data !== null, error: null };
   } catch (error) {
-    console.error('[checkIfProfileExists] Error checking profile existence:', error);
-    return false;
+    console.warn('[checkIfProfileExists] Error checking profile existence:', error);
+    return { data: null, error };
   }
 };
 

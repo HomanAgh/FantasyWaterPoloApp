@@ -80,6 +80,34 @@ export const fetchAllRounds = async () => {
 };
 
 /**
+ * Fetch the next round after a given round number
+ * @param {number} afterRoundNumber - Current round_number
+ * @returns {Promise<{data: Object|null, error: Error|null}>}
+ */
+export const fetchNextRound = async (afterRoundNumber) => {
+  try {
+    if (afterRoundNumber == null) {
+      return { data: null, error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('rounds')
+      .select('*')
+      .gt('round_number', afterRoundNumber)
+      .order('round_number', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error fetching next round:', error);
+    return { data: null, error };
+  }
+};
+
+/**
  * Get a specific round by ID
  * @param {string} roundId - Round UUID
  * @returns {Promise<{data: Object|null, error: Error|null}>}

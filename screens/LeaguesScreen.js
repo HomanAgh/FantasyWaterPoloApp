@@ -16,12 +16,11 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Icons } from '../assets/images/icons';
-import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { useAuth } from '../context/AuthContext';
 import LeaderboardItem from '../components/LeaderboardItem';
 import {
   fetchGlobalLeaderboard,
-  getUserGlobalRank,
   fetchMyLeagues,
   createLeague,
   joinLeague,
@@ -61,7 +60,6 @@ function validateInviteCode(code) {
 export default function LeaguesScreen({ navigation }) {
   const { userId } = useAuth();
   const [leaderboard, setLeaderboard] = useState([]);
-  const [userRank, setUserRank] = useState(null);
   const [myLeagues, setMyLeagues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -77,9 +75,8 @@ export default function LeaguesScreen({ navigation }) {
     setError(null);
 
     try {
-      const [leaderboardResult, rankResult, leaguesResult] = await Promise.all([
+      const [leaderboardResult, leaguesResult] = await Promise.all([
         fetchGlobalLeaderboard(50),
-        getUserGlobalRank(userId),
         fetchMyLeagues(),
       ]);
 
@@ -87,16 +84,11 @@ export default function LeaguesScreen({ navigation }) {
         throw leaderboardResult.error;
       }
 
-      if (rankResult.error) {
-        console.warn('Error fetching user rank:', rankResult.error);
-      }
-
       if (leaguesResult.error) {
         console.warn('Error fetching my leagues:', leaguesResult.error);
       }
 
       setLeaderboard(leaderboardResult.data || []);
-      setUserRank(rankResult);
       setMyLeagues(leaguesResult.data || []);
     } catch (err) {
       console.error('Error loading leaderboard:', err);
@@ -242,148 +234,141 @@ export default function LeaguesScreen({ navigation }) {
     <>
       <ScrollView
         style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.oceanMedium}
-            colors={[colors.oceanMedium]}
+            tintColor={colors.auth.neon}
+            colors={[colors.auth.neon]}
           />
-        }>
+        }
+      >
+        {/* ── Header ── */}
         <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <Image source={Icons.trophy} style={styles.headerEmoji} />
-            <Text style={styles.title}>Leagues</Text>
-            <Text style={styles.subtitle}>Compete with other managers</Text>
-          </View>
+          <Text style={styles.title}>LEAGUES</Text>
         </View>
 
-        {userRank && userRank.rank && (
-          <View style={[styles.card, styles.yourRankCard]}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>Your Global Rank</Text>
-              <Image source={Icons.goal} style={styles.trophyEmoji} />
-            </View>
-            <View style={styles.yourRankContent}>
-              <View style={styles.yourRankMain}>
-                <Text style={styles.yourRankNumber}>#{userRank.rank}</Text>
-                <Text style={styles.yourRankPoints}>{userRank.totalPoints} pts</Text>
-              </View>
-              <Text style={styles.yourRankTotal}>
-                of {userRank.totalUsers} managers
-              </Text>
-            </View>
-          </View>
-        )}
+        {/* ── Join / Create private leagues ── */}
+        <View style={styles.privateCard}>
+          <TouchableOpacity
+            style={[styles.outlineButton, styles.outlineButtonFirst]}
+            onPress={() => setJoinVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Image source={Icons.join} style={[styles.outlineButtonIcon, styles.iconNeon]} />
+            <Text style={styles.outlineButtonText}>JOIN PRIVATE LEAGUE</Text>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
 
-        <View style={[styles.card, styles.actionsCard]}>
+          <TouchableOpacity
+            style={styles.outlineButton}
+            onPress={() => setCreateVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Image source={Icons.join} style={[styles.outlineButtonIcon, styles.iconNeon]} />
+            <Text style={styles.outlineButtonText}>CREATE PRIVATE LEAGUE</Text>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Joined private leagues ── */}
+        <View style={styles.privateCard}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>My Leagues</Text>
-            <Image source={Icons.handshake} style={styles.leaderboardIcon} />
+            <Text style={styles.cardTitle}>PRIVATE LEAGUES</Text>
+            <Image source={Icons.trophy} style={[styles.cardHeaderIcon, styles.iconNeon]} />
           </View>
 
           {myLeagues.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No private leagues yet</Text>
-              <Text style={styles.emptySubtext}>
-                Create one and share the code, or join with a friend's code.
-              </Text>
-            </View>
+            <Text style={styles.myLeaguesEmpty}>
+              You haven't joined any private leagues yet.
+            </Text>
           ) : (
-            myLeagues.map((league) => (
-              <TouchableOpacity
-                key={league.id}
-                style={styles.leagueRow}
-                onPress={() => openLeague(league)}
-                activeOpacity={0.7}>
-                <View style={styles.leagueRowInfo}>
-                  <Text style={styles.leagueRowName}>{league.name}</Text>
-                  <Text style={styles.leagueRowMeta}>
-                    {league.member_count} member{league.member_count !== 1 ? 's' : ''}
-                    {league.created_by === userId ? ' · Admin' : ''}
-                  </Text>
-                </View>
-                <Text style={styles.leagueRowChevron}>›</Text>
-              </TouchableOpacity>
-            ))
+            <View style={styles.myLeaguesList}>
+              {myLeagues.map((league, index) => (
+                <TouchableOpacity
+                  key={league.id}
+                  style={[
+                    styles.leagueRow,
+                    index === myLeagues.length - 1 && styles.leagueRowLast,
+                  ]}
+                  onPress={() => openLeague(league)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.leagueRowInfo}>
+                    <Text style={styles.leagueRowName}>{league.name.toUpperCase()}</Text>
+                    <Text style={styles.leagueRowMeta}>
+                      {league.member_count} MEMBER{league.member_count !== 1 ? 'S' : ''}
+                      {league.created_by === userId ? ' · ADMIN' : ''}
+                    </Text>
+                  </View>
+                  <Text style={styles.chevron}>›</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           )}
-
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => setCreateVisible(true)}>
-            <Image source={Icons.handshake} style={styles.buttonIcon} />
-            <Text style={styles.primaryButtonText}>Create Private League</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => setJoinVisible(true)}>
-            <Image source={Icons.handshake} style={styles.buttonIcon} />
-            <Text style={styles.secondaryButtonText}>Join Private League</Text>
-          </TouchableOpacity>
         </View>
 
-        <View style={[styles.card, styles.leaderboardCard]}>
+        {/* ── Global Leaderboard ── */}
+        <View style={styles.leaderboardCard}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Global Leaderboard</Text>
-            <Image source={Icons.graph} style={styles.leaderboardIcon} />
+            <Text style={styles.cardTitle}>GLOBAL LEADERBOARD</Text>
+            <Image source={Icons.trophy} style={[styles.cardHeaderIcon, styles.iconNeon]} />
           </View>
-          <Text style={styles.reportHint}>
-            Long-press a team to report an offensive name
-          </Text>
 
           {loading && !refreshing ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.oceanMedium} />
-              <Text style={styles.loadingText}>Loading rankings...</Text>
+              <ActivityIndicator size="large" color={colors.auth.neon} />
+              <Text style={styles.loadingText}>LOADING RANKINGS...</Text>
             </View>
           ) : error ? (
-            <View style={styles.errorContainer}>
-              <Image source={Icons.warning} style={styles.errorEmoji} />
-              <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity
-                style={styles.retryButton}
-                onPress={loadScreenData}>
-                <Text style={styles.retryButtonText}>Retry</Text>
+            <View style={styles.emptyContainer}>
+              <Image source={Icons.warning} style={styles.emptyIcon} />
+              <Text style={styles.emptyTitle}>{error.toUpperCase()}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={loadScreenData} activeOpacity={0.8}>
+                <Text style={styles.retryButtonText}>RETRY</Text>
               </TouchableOpacity>
             </View>
           ) : leaderboard.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Image source={Icons.wave} style={styles.emptyEmoji} />
-              <Text style={styles.emptyText}>No rankings yet</Text>
+              <Image source={Icons.bigtrophy} style={styles.emptyIcon} />
+              <Text style={styles.emptyTitle}>NO RANKINGS YET</Text>
               <Text style={styles.emptySubtext}>
-                Be the first to build your team and score points!
+                Be the first to build your team{'\n'}and score points.
               </Text>
             </View>
           ) : (
-            leaderboard.map((entry) => (
-              <LeaderboardItem
-                key={entry.user_id}
-                entry={entry}
-                isCurrentUser={entry.user_id === userId}
-                onLongPress={
-                  entry.user_id !== userId
-                    ? () => handleReportTeamName(entry)
-                    : undefined
-                }
-              />
-            ))
+            <>
+              <Text style={styles.reportHint}>LONG-PRESS A TEAM TO REPORT AN OFFENSIVE NAME</Text>
+              {leaderboard.map((entry) => (
+                <LeaderboardItem
+                  key={entry.user_id}
+                  entry={entry}
+                  isCurrentUser={entry.user_id === userId}
+                  onLongPress={
+                    entry.user_id !== userId
+                      ? () => handleReportTeamName(entry)
+                      : undefined
+                  }
+                />
+              ))}
+            </>
           )}
         </View>
-
-        <View style={styles.bottomSpacer} />
       </ScrollView>
 
       <LeagueFormModal
         visible={createVisible}
-        title="Create Private League"
-        label="League name"
+        title="CREATE PRIVATE LEAGUE"
+        label="LEAGUE NAME"
         value={leagueName}
         onChangeText={setLeagueName}
         placeholder="Office League"
         hint="3-30 characters • Letters, numbers & spaces"
         maxLength={30}
         autoCapitalize="words"
-        submitLabel="Create league"
+        submitLabel="CREATE LEAGUE"
         submitting={submitting}
         onSubmit={handleCreateLeague}
         onClose={closeCreateModal}
@@ -391,8 +376,8 @@ export default function LeaguesScreen({ navigation }) {
 
       <LeagueFormModal
         visible={joinVisible}
-        title="Join Private League"
-        label="Invite code"
+        title="JOIN PRIVATE LEAGUE"
+        label="INVITE CODE"
         value={inviteCode}
         onChangeText={(text) => setInviteCode(text.toUpperCase())}
         placeholder="ABC123"
@@ -400,7 +385,7 @@ export default function LeaguesScreen({ navigation }) {
         maxLength={6}
         autoCapitalize="characters"
         autoCorrect={false}
-        submitLabel="Join league"
+        submitLabel="JOIN LEAGUE"
         submitting={submitting}
         onSubmit={handleJoinLeague}
         onClose={closeJoinModal}
@@ -430,10 +415,12 @@ function LeagueFormModal({
       animationType="slide"
       transparent
       visible={visible}
-      onRequestClose={onClose}>
+      onRequestClose={onClose}
+    >
       <KeyboardAvoidingView
         style={styles.modalOverlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <TouchableOpacity
           style={styles.modalDismiss}
           activeOpacity={1}
@@ -447,7 +434,7 @@ function LeagueFormModal({
             value={value}
             onChangeText={onChangeText}
             placeholder={placeholder}
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={colors.auth.placeholder}
             maxLength={maxLength}
             autoCapitalize={autoCapitalize}
             autoCorrect={autoCorrect}
@@ -456,20 +443,23 @@ function LeagueFormModal({
           />
           <Text style={styles.modalHint}>{hint}</Text>
           <TouchableOpacity
-            style={[styles.primaryButton, submitting && styles.disabledButton]}
+            style={[styles.modalSubmit, submitting && styles.disabledButton]}
             onPress={onSubmit}
-            disabled={submitting}>
+            disabled={submitting}
+            activeOpacity={0.8}
+          >
             {submitting ? (
               <ActivityIndicator color={colors.white} />
             ) : (
-              <Text style={styles.primaryButtonText}>{submitLabel}</Text>
+              <Text style={styles.modalSubmitText}>{submitLabel}</Text>
             )}
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.modalCancel}
             onPress={onClose}
-            disabled={submitting}>
-            <Text style={styles.modalCancelText}>Cancel</Text>
+            disabled={submitting}
+          >
+            <Text style={styles.modalCancelText}>CANCEL</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -480,299 +470,285 @@ function LeagueFormModal({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: 'transparent',
   },
+  scrollContent: {
+    paddingBottom: spacing.xl,
+  },
+
   header: {
-    backgroundColor: colors.oceanDeep,
-    paddingTop: 60,
-    paddingBottom: spacing.lg,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    ...shadows.large,
-  },
-  headerContent: {
-    paddingHorizontal: spacing.lg,
+    paddingTop: 56,
+    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
-  },
-  headerEmoji: {
-    width: 48,
-    height: 48,
-    marginBottom: spacing.sm,
-    resizeMode: 'contain',
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 64,
     color: colors.white,
-    marginBottom: spacing.xs,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginBottom: spacing.xxl + 8
   },
-  subtitle: {
-    fontSize: 16,
-    color: colors.oceanBright,
-    fontWeight: '500',
+
+  iconNeon: {
+    tintColor: colors.auth.neon,
   },
-  card: {
-    backgroundColor: colors.pearl,
-    margin: spacing.md,
-    padding: spacing.lg,
-    borderRadius: borderRadius.large,
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.sand + '50',
-  },
-  yourRankCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.sand,
-    backgroundColor: colors.sand + '08',
-  },
-  actionsCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.coral,
-  },
-  leaderboardCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.sand,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+
+  privateCard: {
+    marginHorizontal: spacing.md,
     marginBottom: spacing.md,
+    marginTop: spacing.sm,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.auth.glass,
+    borderRadius: borderRadius.large,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
   },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.textDark,
+
+  myLeaguesList: {
+    marginTop: 0,
   },
-  trophyEmoji: {
-    width: 24,
-    height: 24,
-    resizeMode: 'contain',
-  },
-  leaderboardIcon: {
-    width: 24,
-    height: 24,
-    resizeMode: 'contain',
-  },
-  yourRankContent: {
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-  },
-  yourRankMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  yourRankNumber: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.success,
-  },
-  yourRankPoints: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.textDark,
-  },
-  yourRankTotal: {
-    fontSize: 14,
-    color: colors.textMuted,
-    fontWeight: '500',
+  myLeaguesEmpty: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 16,
+    color: colors.auth.statLabel,
+    letterSpacing: 0.3,
+    paddingVertical: spacing.sm,
   },
   leagueRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.oceanBright + '20',
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.auth.neonSoft,
+  },
+  leagueRowLast: {
+    borderBottomWidth: 0,
   },
   leagueRowInfo: {
     flex: 1,
   },
   leagueRowName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textDark,
-    marginBottom: spacing.xs,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 18,
+    color: colors.white,
+    marginBottom: 2,
   },
   leagueRowMeta: {
-    fontSize: 13,
-    color: colors.textMuted,
-    fontWeight: '500',
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 14,
+    color: colors.auth.statLabel,
+    letterSpacing: 0.5,
   },
-  leagueRowChevron: {
+
+  outlineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    borderRadius: borderRadius.round,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
+  },
+  outlineButtonFirst: {
+    marginTop: 0,
+  },
+  outlineButtonIcon: {
+    width: 20,
+    height: 20,
+    resizeMode: 'contain',
+    marginRight: spacing.sm,
+  },
+  outlineButtonText: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 24,
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+  chevron: {
     fontSize: 28,
-    color: colors.oceanMedium,
+    color: colors.auth.neon,
     fontWeight: '300',
-    marginLeft: spacing.sm,
+    lineHeight: 28,
+    marginTop: -2,
   },
-  primaryButton: {
-    backgroundColor: colors.oceanMedium,
+
+  leaderboardCard: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
     padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    marginTop: spacing.md,
+    backgroundColor: colors.auth.glass,
+    borderRadius: borderRadius.large,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginHorizontal: -spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
     marginBottom: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    ...shadows.small,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.auth.neon,
   },
-  secondaryButton: {
-    backgroundColor: colors.pearl,
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    borderWidth: 2,
-    borderColor: colors.oceanMedium,
+  cardTitle: {
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 20,
+    color: colors.white,
+    letterSpacing: 0.5,
   },
-  disabledButton: {
-    opacity: 0.5,
-  },
-  buttonIcon: {
-    width: 18,
-    height: 18,
+  cardHeaderIcon: {
+    width: 22,
+    height: 22,
     resizeMode: 'contain',
   },
-  primaryButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  secondaryButtonText: {
-    color: colors.oceanMedium,
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
+
   loadingContainer: {
-    padding: spacing.xl,
+    paddingVertical: spacing.xl,
     alignItems: 'center',
   },
   loadingText: {
     marginTop: spacing.md,
+    fontFamily: fonts.barlowCondensedMedium,
     fontSize: 14,
-    color: colors.textMuted,
-  },
-  errorContainer: {
-    padding: spacing.xl,
-    alignItems: 'center',
-  },
-  errorEmoji: {
-    width: 48,
-    height: 48,
-    marginBottom: spacing.sm,
-    resizeMode: 'contain',
-  },
-  errorText: {
-    fontSize: 16,
-    color: colors.error,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  retryButton: {
-    backgroundColor: colors.oceanMedium,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.medium,
-  },
-  retryButtonText: {
-    color: colors.white,
-    fontSize: 14,
-    fontWeight: '600',
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
   },
   emptyContainer: {
-    padding: spacing.lg,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
   },
-  emptyEmoji: {
-    width: 48,
-    height: 48,
-    marginBottom: spacing.sm,
+  emptyIcon: {
+    width: 80,
+    height: 80,
     resizeMode: 'contain',
+    marginBottom: spacing.lg,
   },
-  emptyText: {
-    fontSize: 16,
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
-    fontWeight: '600',
+  emptyTitle: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 24,
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: colors.textMuted,
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 18,
+    color: colors.white,
     textAlign: 'center',
+    lineHeight: 22,
   },
   reportHint: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: -spacing.sm,
-    marginBottom: spacing.md,
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 11,
+    color: colors.auth.placeholder,
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
   },
-  bottomSpacer: {
-    height: spacing.xl,
+  retryButton: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
   },
+  retryButtonText: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 14,
+    color: colors.auth.neon,
+    letterSpacing: 1,
+  },
+
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(2, 11, 24, 0.72)',
     justifyContent: 'flex-end',
   },
   modalDismiss: {
     flex: 1,
   },
   modalContent: {
-    backgroundColor: colors.pearl,
+    backgroundColor: '#0A1A2E',
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    borderBottomWidth: 0,
     padding: spacing.xl,
     paddingBottom: spacing.xl + 20,
-    ...shadows.large,
   },
   modalTitle: {
+    fontFamily: fonts.barlowCondensedExtraBold,
     fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.textDark,
+    color: colors.white,
+    letterSpacing: 0.5,
     marginBottom: spacing.lg,
     textAlign: 'center',
   },
   modalLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.oceanDeep,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 13,
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
     marginBottom: spacing.sm,
   },
   modalInput: {
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: colors.auth.inputBg,
     borderRadius: borderRadius.medium,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    fontSize: 18,
-    color: colors.textDark,
-    borderWidth: 2,
-    borderColor: colors.oceanMedium,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 20,
+    color: colors.white,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
     textAlign: 'center',
-    fontWeight: '600',
   },
   modalHint: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.auth.placeholder,
     textAlign: 'center',
     marginTop: spacing.sm,
     marginBottom: spacing.md,
   },
+  modalSubmit: {
+    backgroundColor: colors.auth.buttonTop,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    minHeight: 48,
+  },
+  modalSubmitText: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 16,
+    color: colors.white,
+    letterSpacing: 1,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
   modalCancel: {
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     alignItems: 'center',
   },
   modalCancelText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textMuted,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 14,
+    color: colors.auth.placeholder,
+    letterSpacing: 1,
   },
 });

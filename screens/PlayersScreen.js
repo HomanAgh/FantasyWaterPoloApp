@@ -12,7 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
-import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { searchAndFilterPlayersWithStats } from '../services/playerService';
 import { fetchTeams } from '../services/teamService';
 import { useTeam } from '../context/TeamContext';
@@ -65,15 +65,15 @@ export default function PlayersScreen({ navigation, route }) {
 
   // Stat columns for the table — key matches statView state values
   const STAT_COLS = [
-    { key: 'pts',   label: 'Pts',  field: 'points' },
-    { key: 'price', label: '£',    field: 'price' },
-    { key: 'goals', label: 'Gls',  field: 'goals' },
-    { key: 'ass',   label: 'Ass',  field: 'assists' },
-    { key: 'saves', label: 'Svs',  field: 'saves' },
-    { key: 'blc',   label: 'Blc',  field: 'blocks' },
-    { key: 'spr',   label: 'Spr',  field: 'sprints' },
+    { key: 'pts',   label: 'PTS',  field: 'points' },
+    { key: 'price', label: '$',    field: 'price' },
+    { key: 'goals', label: 'GLS',  field: 'goals' },
+    { key: 'ass',   label: 'ASS',  field: 'assists' },
+    { key: 'saves', label: 'SVS',  field: 'saves' },
+    { key: 'blc',   label: 'BLC',  field: 'blocks' },
+    { key: 'spr',   label: 'SPR',  field: 'sprints' },
     { key: 'cs',    label: 'CS',   field: 'cleanSheets' },
-    { key: 'app',   label: 'App',  field: 'gamesPlayed' },
+    { key: 'app',   label: 'APP',  field: 'gamesPlayed' },
   ];
 
   // Fixed dimensions for pixel-perfect column alignment
@@ -81,7 +81,7 @@ export default function PlayersScreen({ navigation, route }) {
   const HEADER_H    = 36;
   const NAME_COL_W  = 145;
   const ACTION_COL_W = 52;
-  const STAT_COL_W  = 52;
+  const STAT_COL_W  = 50;
 
   // Get team state from context
   const { 
@@ -95,6 +95,7 @@ export default function PlayersScreen({ navigation, route }) {
     pendingDeductions,
     isUnlimitedPhase,
     squadFinalized,
+    MAX_PLAYERS,
   } = useTeam();
 
   // Get round info from context
@@ -107,7 +108,7 @@ export default function PlayersScreen({ navigation, route }) {
 
   // Post-GW1, a full squad cannot use addPlayer / removePlayer directly —
   // all changes must go through the Transfers → replace flow.
-  const isSquadFull = selectedPlayers.length >= 12;
+  const isSquadFull = selectedPlayers.length >= MAX_PLAYERS;
 
   // Load teams on mount
   useEffect(() => {
@@ -254,38 +255,32 @@ export default function PlayersScreen({ navigation, route }) {
   })();
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* ── Header ── */}
       <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Image source={Icons.player} style={styles.headerEmoji} />
-          <Text style={styles.title}>
-            {mode === 'replace' && replacingPlayer
-              ? 'Select Replacement'
-              : 'Players'}
-          </Text>
-          {mode === 'replace' && replacingPlayer && (
-            <View style={styles.replacementBanner}>
-              <Text style={styles.replacementText}>
-                Replacing: {replacingPlayer.name}
-              </Text>
-              <Text style={styles.replacementSubtext}>
-                ({replacingPlayer.position}) • ${replacingPlayer.price.toFixed(1)}M
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
+        <Text style={styles.title}>
+          {mode === 'replace' && replacingPlayer ? 'SELECT REPLACEMENT' : 'PLAYERS'}
+        </Text>
+        {mode === 'replace' && replacingPlayer && (
+          <View style={styles.replacementBanner}>
+            <Text style={styles.replacementText}>
+              REPLACING: {replacingPlayer.name.toUpperCase()}
+            </Text>
+            <Text style={styles.replacementSubtext}>
+              ({replacingPlayer.position}) • ${replacingPlayer.price.toFixed(1)}M
+            </Text>
+          </View>
+        )}
 
-      {/* Team Info Banner */}
-      <View style={styles.teamInfoBanner}>
-        <View style={styles.teamInfoItem}>
-          <Text style={styles.teamInfoLabel}>Team</Text>
-          <Text style={styles.teamInfoValue}>{selectedPlayers.length}/12</Text>
-        </View>
-        <View style={styles.teamInfoDivider} />
-        <View style={styles.teamInfoItem}>
-          <Text style={styles.teamInfoLabel}>Budget</Text>
-          <Text style={styles.budgetValue}>${effectiveBudget.toFixed(1)}M</Text>
+        <View style={styles.statsRow}>
+          <View style={styles.statBadge}>
+            <Text style={styles.statLabel}>TEAM</Text>
+            <Text style={styles.statValue}>{selectedPlayers.length}/{MAX_PLAYERS}</Text>
+          </View>
+          <View style={styles.statBadge}>
+            <Text style={styles.statLabel}>BUDGET</Text>
+            <Text style={styles.statValue}>${effectiveBudget.toFixed(1)}M</Text>
+          </View>
         </View>
       </View>
 
@@ -294,7 +289,7 @@ export default function PlayersScreen({ navigation, route }) {
         <View style={styles.lockedBanner}>
           <Image source={Icons.locked} style={styles.lockedIcon} />
           <Text style={styles.lockedText}>
-            Transfers locked - Gameweek {currentRound.round_number} in progress
+            Transfers locked — Gameweek {currentRound.round_number} in progress
           </Text>
         </View>
       )}
@@ -310,19 +305,21 @@ export default function PlayersScreen({ navigation, route }) {
       {/* Search and Filter */}
       <View style={styles.filterContainer}>
         <View style={styles.searchWrapper}>
-          <Image source={Icons.player} style={styles.searchIcon} />
+          <Image source={Icons.magglass} style={[styles.searchIcon, styles.iconNeon]} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search players..."
-            placeholderTextColor={colors.textMuted}
+            placeholder="Search players...."
+            placeholderTextColor={colors.auth.placeholder}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
         </View>
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.positionFilter}>
+          contentContainerStyle={styles.positionFilter}
+        >
           {positions.map((pos) => (
             <TouchableOpacity
               key={pos}
@@ -331,31 +328,36 @@ export default function PlayersScreen({ navigation, route }) {
                 selectedPosition === pos && styles.filterChipActive,
               ]}
               onPress={() => setSelectedPosition(pos)}
-              activeOpacity={0.7}>
+              activeOpacity={0.7}
+            >
               <Text
                 style={[
                   styles.filterChipText,
                   selectedPosition === pos && styles.filterChipTextActive,
-                ]}>
-                {pos}
+                ]}
+              >
+                {pos === 'All' ? 'ALL' : pos === 'Goalkeeper' ? 'GOALKEEPER' : 'FIELD PLAYER'}
               </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
-        
+
         {/* Team Dropdown */}
         <TouchableOpacity
           style={styles.teamDropdown}
           onPress={() => setShowTeamPicker(true)}
-          activeOpacity={0.7}>
+          activeOpacity={0.7}
+        >
           <View style={styles.teamDropdownLabelRow}>
-            <Image source={Icons.swimmer} style={styles.teamDropdownLabelIcon} />
+            <Image source={Icons.swimmer} style={[styles.teamDropdownLabelIcon, styles.iconNeon]} />
             <Text style={styles.teamDropdownLabel}>Team:</Text>
           </View>
-          <Text style={styles.teamDropdownValue}>
-            {teams.find(t => t.id === selectedTeam)?.name || 'All Teams'}
+          <Text style={styles.teamDropdownValue} numberOfLines={1}>
+            {teams.find(t => t.id === selectedTeam)?.name || 'All teams'}
           </Text>
-          <Text style={styles.teamDropdownIcon}>▼</Text>
+          <View style={styles.dropdownCaret}>
+            <Text style={styles.teamDropdownIcon}>▼</Text>
+          </View>
         </TouchableOpacity>
 
         {/* Price Filter Row */}
@@ -363,29 +365,35 @@ export default function PlayersScreen({ navigation, route }) {
           <TouchableOpacity
             style={styles.priceDropdown}
             onPress={() => setShowPricePicker(true)}
-            activeOpacity={0.7}>
+            activeOpacity={0.7}
+          >
             <View style={styles.teamDropdownLabelRow}>
-              <Image source={Icons.trophy} style={styles.teamDropdownLabelIcon} />
+              <Image source={Icons.dollarsign} style={[styles.teamDropdownLabelIcon, styles.iconNeon]} />
               <Text style={styles.teamDropdownLabel}>Max:</Text>
             </View>
-            <Text style={styles.teamDropdownValue}>
+            <Text style={styles.teamDropdownValue} numberOfLines={1}>
               {maxPrice !== null ? `$${maxPrice.toFixed(1)}M` : 'Any price'}
             </Text>
-            <Text style={styles.teamDropdownIcon}>▼</Text>
+            <View style={styles.dropdownCaret}>
+              <Text style={styles.teamDropdownIcon}>▼</Text>
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.affordableChip, affordableOnly && styles.affordableChipActive]}
             onPress={() => setAffordableOnly(v => !v)}
-            activeOpacity={0.7}>
-            <Text style={[styles.affordableChipText, affordableOnly && styles.affordableChipTextActive]}>
-              {affordableOnly
-                ? `≤$${effectiveBudget.toFixed(1)}M`
-                : 'Affordable'}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.affordableChipText,
+                affordableOnly && styles.affordableChipTextActive,
+              ]}
+            >
+              {affordableOnly ? `≤$${effectiveBudget.toFixed(1)}M` : 'Affordable'}
             </Text>
           </TouchableOpacity>
         </View>
-
       </View>
 
       {/* Team Picker Modal */}
@@ -480,7 +488,7 @@ export default function PlayersScreen({ navigation, route }) {
       <View style={styles.playersList}>
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.oceanMedium} />
+            <ActivityIndicator size="large" color={colors.auth.neon} />
             <Text style={styles.loadingText}>Loading players...</Text>
           </View>
         ) : error ? (
@@ -515,7 +523,7 @@ export default function PlayersScreen({ navigation, route }) {
                   onPress={() => setStatView('name')}
                   activeOpacity={0.7}>
                   <Text style={[styles.thText, statView === 'name' && styles.thTextActive]}>
-                    Player {statView === 'name' ? '↑' : ''}
+                    PLAYER {statView === 'name' ? '↑' : ''}
                   </Text>
                 </TouchableOpacity>
 
@@ -592,7 +600,7 @@ export default function PlayersScreen({ navigation, route }) {
                           ]}>
                           <Text style={[styles.tdText, statView === col.key && styles.tdTextActive]}>
                             {col.key === 'price'
-                              ? `$${player.price.toFixed(1)}`
+                              ? `$ ${player.price.toFixed(1)}M`
                               : player[col.field]}
                           </Text>
                         </View>
@@ -662,9 +670,14 @@ export default function PlayersScreen({ navigation, route }) {
                           activeOpacity={0.7}>
                           {isLocked
                             ? <Image source={Icons.locked} style={styles.pcBtnLockIcon} />
-                            : <Text style={[styles.pcBtnAddText, !canAdd && styles.pcBtnDisabledText]}>
-                                {(redirectToTransfers || mode === 'replace') ? '⇄' : '+'}
-                              </Text>
+                            : (redirectToTransfers || mode === 'replace')
+                              ? <Text style={[styles.pcBtnAddText, !canAdd && styles.pcBtnDisabledText]}>⇄</Text>
+                              : (
+                                <Image
+                                  source={Icons.plus}
+                                  style={[styles.pcBtnPlusIcon, !canAdd && styles.pcBtnPlusIconDisabled]}
+                                />
+                              )
                           }
                         </TouchableOpacity>
                       )}
@@ -684,359 +697,92 @@ export default function PlayersScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: 'transparent',
   },
+  content: {
+    paddingBottom: spacing.xl,
+  },
+
   header: {
-    backgroundColor: colors.oceanDeep,
-    paddingTop: 60,
-    paddingBottom: spacing.lg,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    ...shadows.large,
-  },
-  headerContent: {
-    paddingHorizontal: spacing.lg,
+    paddingTop: 56,
+    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
-  },
-  headerEmoji: {
-    width: 48,
-    height: 48,
-    marginBottom: spacing.sm,
-    resizeMode: 'contain',
   },
   title: {
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 64,
+    color: colors.white,
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginBottom: spacing.xxl + 32,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    width: '100%',
+  },
+  statBadge: {
+    flex: 1,
+    backgroundColor: colors.auth.glass,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md + 4,
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    alignItems: 'center',
+    minHeight: 72,
+    justifyContent: 'center',
+  },
+  statLabel: {
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 16,
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
+    marginBottom: -2,
+  },
+  statValue: {
+    fontFamily: fonts.barlowCondensedExtraBold,
     fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.white,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    color: colors.auth.statValue,
   },
-  teamInfoBanner: {
-    backgroundColor: colors.pearl,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    ...shadows.small,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.oceanBright + '20',
-  },
-  teamInfoItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  teamInfoDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: colors.oceanBright + '40',
-  },
-  teamInfoLabel: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-  },
-  teamInfoValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.oceanDeep,
-  },
-  budgetValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.teal,
-  },
-  errorBanner: {
-    backgroundColor: '#FEE2E2',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: '#FCA5A5',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  errorBannerText: {
-    fontSize: 14,
-    color: '#991B1B',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  filterContainer: {
-    backgroundColor: colors.pearl,
-    padding: spacing.md,
-    ...shadows.small,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.oceanBright + '20',
-  },
-  searchWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.backgroundLight,
-    borderRadius: borderRadius.medium,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 2,
-    borderColor: colors.oceanBright + '40',
-  },
-  searchIcon: {
-    width: 20,
-    height: 20,
-    marginRight: spacing.sm,
-    resizeMode: 'contain',
-  },
-  searchInput: {
-    flex: 1,
-    padding: spacing.md,
-    fontSize: 16,
-    color: colors.textDark,
-  },
-  positionFilter: {
-    flexDirection: 'row',
-  },
-  filterChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.round,
-    backgroundColor: colors.backgroundLight,
-    marginRight: spacing.sm,
-    borderWidth: 2,
-    borderColor: colors.oceanBright + '40',
-  },
-  filterChipActive: {
-    backgroundColor: colors.oceanMedium,
-    borderColor: colors.oceanMedium,
-  },
-  filterChipText: {
-    fontSize: 14,
-    color: colors.textMedium,
-    fontWeight: '600',
-  },
-  filterChipTextActive: {
-    color: colors.white,
-    fontWeight: '700',
-  },
-  playersList: {
-    padding: 0,
-  },
-  // ── Table layout ──
-  tableOuter: {
-    backgroundColor: colors.pearl,
-    ...shadows.small,
-  },
-  // Header cell base
-  th: {
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.oceanDeep,
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 4,
-  },
-  thName: {
-    alignItems: 'flex-start',
-    paddingHorizontal: spacing.sm,
-  },
-  thActive: {
-    backgroundColor: colors.teal,
-  },
-  thText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.75)',
-    letterSpacing: 0.5,
-  },
-  thTextActive: {
-    color: colors.white,
-  },
-  thArrow: {
-    fontSize: 9,
-    color: colors.white,
-    marginTop: 1,
-  },
-  // Name column data cell
-  tdName: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.oceanBright + '15',
-    gap: spacing.sm,
-  },
-  // Stat data cell
-  td: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.oceanBright + '15',
-    borderRightWidth: 1,
-    borderRightColor: colors.oceanBright + '10',
-  },
-  tdActive: {
-    backgroundColor: colors.oceanDeep + '10',
-  },
-  tdText: {
-    fontSize: 13,
-    color: colors.textMedium,
-    fontWeight: '500',
-  },
-  tdTextActive: {
-    color: colors.oceanDeep,
-    fontWeight: '700',
-  },
-  // Action cell (+ / ✓ button column)
-  tdAction: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.oceanBright + '15',
-  },
-  // Row stripe / state
-  rowEven: {
-    backgroundColor: colors.pearl,
-  },
-  rowOdd: {
-    backgroundColor: colors.backgroundLight,
-  },
-  rowInTeam: {
-    backgroundColor: colors.teal + '12',
-  },
-  // Position badge (shared with table)
-  pcPosBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  pcPosBadgeGK: {
-    backgroundColor: colors.teal,
-  },
-  pcPosBadgeFP: {
-    backgroundColor: colors.oceanMedium,
-  },
-  pcPosText: {
-    color: colors.white,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  pcNameBlock: {
-    flex: 1,
-    minWidth: 0,
-  },
-  pcName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textDark,
-  },
-  pcTeam: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1,
-  },
-  pcBtnAdd: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.oceanMedium,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.small,
-  },
-  pcBtnAddText: {
-    color: colors.white,
-    fontSize: 18,
-    fontWeight: '700',
-    lineHeight: 20,
-  },
-  pcBtnIn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.teal,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pcBtnInText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  pcBtnDisabled: {
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.textMuted + '40',
-  },
-  pcBtnDisabledText: {
-    color: colors.textMuted,
-  },
-  emptyContainer: {
-    padding: spacing.xxl,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 18,
-    color: colors.textMuted,
-    marginBottom: spacing.sm,
-    fontWeight: '600',
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  loadingContainer: {
-    padding: spacing.xxl,
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: colors.textMuted,
-    marginTop: spacing.md,
-    fontWeight: '600',
-  },
-  errorContainer: {
-    padding: spacing.xxl,
-    alignItems: 'center',
-  },
-  errorText: {
-    fontSize: 16,
-    color: colors.textMuted,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  retryButton: {
-    backgroundColor: colors.oceanMedium,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.medium,
-    ...shadows.small,
-  },
-  retryButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
+
   lockedBanner: {
-    backgroundColor: colors.coral + '18',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.coral + '22',
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.coral,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.coral,
   },
   lockedIcon: {
-    width: 20,
-    height: 20,
+    width: 18,
+    height: 18,
     resizeMode: 'contain',
+  },
+  lockedText: {
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 18,
+    color: colors.coral,
+    letterSpacing: 0.3,
+    flexShrink: 1,
+  },
+  errorBanner: {
+    backgroundColor: colors.auth.inputBg,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.coral,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorBannerIcon: {
     width: 18,
@@ -1044,123 +790,411 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
     marginRight: spacing.xs,
   },
-  teamDropdownLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  teamDropdownLabelIcon: {
-    width: 14,
-    height: 14,
-    resizeMode: 'contain',
-  },
-  pcBtnLockIcon: {
-    width: 16,
-    height: 16,
-    resizeMode: 'contain',
-  },
-  lockedText: {
+  errorBannerText: {
+    fontFamily: fonts.barlowCondensedSemiBold,
     fontSize: 14,
     color: colors.coral,
-    fontWeight: '700',
+    textAlign: 'center',
+    flexShrink: 1,
   },
-  replacementBanner: {
-    backgroundColor: colors.oceanBright + '30',
+
+  filterContainer: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.medium,
-    marginTop: spacing.sm,
-    borderWidth: 2,
-    borderColor: colors.oceanBright,
+    paddingBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  searchWrapper: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: colors.auth.inputBg,
+    borderRadius: borderRadius.medium,
+    paddingHorizontal: spacing.md,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
   },
-  replacementText: {
-    fontSize: 14,
+  searchIcon: {
+    width: 18,
+    height: 18,
+    marginRight: spacing.sm,
+    resizeMode: 'contain',
+  },
+  iconNeon: {
+    tintColor: colors.auth.neon,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 16,
     color: colors.white,
-    fontWeight: 'bold',
-    marginBottom: 2,
   },
-  replacementSubtext: {
-    fontSize: 12,
-    color: colors.white + 'DD',
-    fontWeight: '600',
+  positionFilter: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingVertical: 2,
   },
+  filterChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.round,
+    backgroundColor: colors.auth.inputBg,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+  },
+  filterChipActive: {
+    backgroundColor: colors.auth.glass,
+    borderColor: colors.auth.neon,
+    shadowColor: colors.auth.neon,
+    shadowOpacity: 0.55,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  filterChipText: {
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 24,
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+  filterChipTextActive: {
+    color: colors.white,
+  },
+
   teamDropdown: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.pearl,
-    padding: spacing.md,
+    backgroundColor: colors.auth.inputBg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.medium,
-    marginTop: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.sand + '60',
-    ...shadows.small,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+  },
+  teamDropdownLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  teamDropdownLabelIcon: {
+    width: 22,
+    height: 22,
+    resizeMode: 'contain',
   },
   teamDropdownLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textDark,
-    marginRight: spacing.sm,
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 16,
+    color: colors.white,
+    marginRight: spacing.xs,
   },
   teamDropdownValue: {
     flex: 1,
-    fontSize: 14,
-    color: colors.oceanDeep,
-    fontWeight: '500',
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 16,
+    color: colors.white,
+  },
+  dropdownCaret: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   teamDropdownIcon: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: 9,
+    color: colors.auth.neon,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.sm,
     gap: spacing.sm,
   },
   priceDropdown: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.pearl,
-    padding: spacing.md,
+    backgroundColor: colors.auth.inputBg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.medium,
-    borderWidth: 1,
-    borderColor: colors.sand + '60',
-    ...shadows.small,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
   },
   affordableChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     borderRadius: borderRadius.medium,
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.sand + '60',
+    backgroundColor: colors.auth.inputBg,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
   },
   affordableChipActive: {
     backgroundColor: colors.sand,
     borderColor: colors.sand,
   },
   affordableChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textMedium,
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 16,
+    color: colors.white,
   },
   affordableChipTextActive: {
-    color: colors.white,
-    fontWeight: '700',
+    color: colors.oceanDeep,
   },
+
+  replacementBanner: {
+    backgroundColor: colors.auth.inputBg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.medium,
+    marginBottom: spacing.md,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    alignItems: 'center',
+    width: '100%',
+  },
+  replacementText: {
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 18,
+    color: colors.white,
+    marginBottom: 2,
+  },
+  replacementSubtext: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 16,
+    color: colors.auth.placeholder,
+  },
+
+  playersList: {
+    paddingHorizontal: spacing.md,
+  },
+  tableOuter: {},
+  th: {
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderTopWidth: 0.5,
+    borderBottomWidth: 0.5,
+    borderTopColor: colors.auth.neon,
+    borderBottomColor: colors.auth.neon,
+    paddingHorizontal: 4,
+  },
+  thName: {
+    alignItems: 'flex-start',
+    paddingHorizontal: spacing.sm,
+  },
+  thActive: {
+    backgroundColor: 'transparent',
+  },
+  thText: {
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 13,
+    color: colors.auth.statLabel,
+    letterSpacing: 0.5,
+  },
+  thTextActive: {
+    color: colors.sand,
+  },
+  thArrow: {
+    fontSize: 9,
+    color: colors.sand,
+    marginTop: 1,
+  },
+  tdName: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.auth.neon,
+    gap: spacing.sm,
+  },
+  td: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.auth.neon,
+  },
+  tdActive: {
+    backgroundColor: 'transparent',
+  },
+  tdText: {
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 18,
+    color: colors.white,
+  },
+  tdTextActive: {
+    color: colors.sand,
+    fontFamily: fonts.barlowCondensedMedium,
+  },
+  tdAction: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.auth.neon,
+  },
+  rowEven: {
+    backgroundColor: 'transparent',
+  },
+  rowOdd: {
+    backgroundColor: 'transparent',
+  },
+  rowInTeam: {
+    backgroundColor: 'transparent',
+  },
+  pcPosBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    backgroundColor: colors.auth.inputBg,
+  },
+  pcPosBadgeGK: {},
+  pcPosBadgeFP: {},
+  pcPosText: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    color: colors.white,
+    fontSize: 16,
+    letterSpacing: 0.5,
+  },
+  pcNameBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  pcName: {
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 18,
+    color: colors.white,
+  },
+  pcTeam: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 11,
+    color: colors.auth.statLabel,
+    marginTop: 1,
+  },
+  pcBtnAdd: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: colors.auth.buttonTop,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 0.5,
+    borderColor: colors.auth.buttonBottom,
+  },
+  pcBtnAddText: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    color: colors.white,
+    fontSize: 20,
+    lineHeight: 22,
+  },
+  pcBtnPlusIcon: {
+    width: 14,
+    height: 14,
+    resizeMode: 'contain',
+    tintColor: colors.white,
+  },
+  pcBtnPlusIconDisabled: {
+    tintColor: colors.auth.placeholder,
+  },
+  pcBtnIn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: colors.auth.glass,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+  },
+  pcBtnInText: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    color: colors.auth.neon,
+    fontSize: 16,
+  },
+  pcBtnDisabled: {
+    backgroundColor: colors.auth.inputBg,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neonSoft,
+  },
+  pcBtnDisabledText: {
+    color: colors.auth.placeholder,
+  },
+  pcBtnLockIcon: {
+    width: 16,
+    height: 16,
+    resizeMode: 'contain',
+    tintColor: colors.auth.placeholder,
+  },
+
+  emptyContainer: {
+    padding: spacing.xxl,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 18,
+    color: colors.white,
+    marginBottom: spacing.sm,
+  },
+  emptySubtext: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 14,
+    color: colors.auth.placeholder,
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    padding: spacing.xxl,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 16,
+    color: colors.auth.placeholder,
+    marginTop: spacing.md,
+  },
+  errorContainer: {
+    padding: spacing.xxl,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 16,
+    color: colors.auth.placeholder,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: colors.auth.buttonTop,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  retryButtonText: {
+    fontFamily: fonts.barlowCondensedBold,
+    color: colors.white,
+    fontSize: 16,
+  },
+
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(2, 11, 24, 0.72)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.pearl,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: '#0A1A2E',
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    borderBottomWidth: 0,
     maxHeight: '70%',
-    ...shadows.large,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1168,16 +1202,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: colors.oceanBright + '20',
+    borderBottomColor: colors.auth.neonSoft,
   },
   modalTitle: {
+    fontFamily: fonts.barlowCondensedExtraBold,
     fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.textDark,
+    color: colors.white,
+    letterSpacing: 0.5,
   },
   modalClose: {
     fontSize: 24,
-    color: colors.textMuted,
+    color: colors.auth.placeholder,
     fontWeight: '300',
   },
   modalList: {
@@ -1188,22 +1223,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.oceanBright + '10',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.auth.neonSoft,
   },
   modalItemActive: {
-    backgroundColor: colors.oceanBright + '10',
+    backgroundColor: 'rgba(0, 174, 239, 0.12)',
   },
   modalItemText: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 16,
-    color: colors.textDark,
+    color: colors.white,
   },
   modalItemTextActive: {
-    fontWeight: '600',
-    color: colors.oceanDeep,
+    fontFamily: fonts.barlowCondensedBold,
+    color: colors.auth.neon,
   },
   modalItemCheck: {
     fontSize: 20,
-    color: colors.success,
+    color: colors.auth.neon,
   },
 });

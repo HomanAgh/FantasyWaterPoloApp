@@ -1,4 +1,9 @@
 import supabase from '../config/supabaseClient';
+import {
+  fetchAppearanceMap,
+  resolveSquadPointsWithAutoSub,
+} from './autoSubstitutionService';
+import { getMultiplePlayersPointsForRound } from './playerRoundPointsService';
 
 /**
  * Save a snapshot of the user's squad at a gameweek deadline.
@@ -20,6 +25,7 @@ export const saveGwSnapshot = async (userId, roundId, players, captainId) => {
       player_id: player.id,
       is_starter: player.isStarter ?? false,
       is_captain: player.id === captainId,
+      position_order: player.positionOrder ?? null,
     }));
 
     const { data, error } = await supabase
@@ -40,13 +46,13 @@ export const saveGwSnapshot = async (userId, roundId, players, captainId) => {
 
 /**
  * Fetch the saved squad snapshot for a specific user + round.
- * Returns an array of { player_id, is_starter, is_captain }.
+ * Returns an array of { player_id, is_starter, is_captain, position_order }.
  */
 export const getGwPicksForRound = async (userId, roundId) => {
   try {
     const { data, error } = await supabase
       .from('user_gw_picks')
-      .select('player_id, is_starter, is_captain')
+      .select('player_id, is_starter, is_captain, position_order')
       .eq('user_id', userId)
       .eq('round_id', roundId);
 
@@ -60,8 +66,58 @@ export const getGwPicksForRound = async (userId, roundId) => {
 };
 
 /**
+ * Enrich picks with player position, then score with auto-subs.
+ *
+ * @param {Array} picks - rows from user_gw_picks (or compatible)
+ * @param {string} roundId
+ * @returns {Promise<{ total: number, slots: Array, usedBenchIds: Set, picksWithPosition: Array }>}
+ */
+export const scorePicksWithAutoSub = async (picks, roundId) => {
+  if (!picks?.length || !roundId) {
+    return { total: 0, slots: [], usedBenchIds: new Set(), picksWithPosition: [] };
+  }
+
+  const playerIds = picks.map(p => p.player_id);
+
+  let playerRows = [];
+  try {
+    const { data, error } = await supabase
+      .from('players')
+      .select('id, position')
+      .in('id', playerIds);
+    if (error) throw error;
+    playerRows = data || [];
+  } catch (error) {
+    console.error('Error fetching player positions for auto-sub:', error);
+  }
+
+  const [appearanceMap, { data: pointsMap }] = await Promise.all([
+    fetchAppearanceMap(playerIds, roundId),
+    getMultiplePlayersPointsForRound(playerIds, roundId),
+  ]);
+
+  const positionById = {};
+  playerRows.forEach(p => {
+    positionById[p.id] = p.position;
+  });
+
+  const picksWithPosition = picks.map(p => ({
+    ...p,
+    position: p.position || positionById[p.player_id] || 'Outfield',
+  }));
+
+  const result = resolveSquadPointsWithAutoSub(
+    picksWithPosition,
+    appearanceMap,
+    pointsMap || {}
+  );
+
+  return { ...result, picksWithPosition, appearanceMap, pointsMap: pointsMap || {} };
+};
+
+/**
  * Calculate the locked score for a specific past round using the saved snapshot.
- * Joins user_gw_picks → player_round_points, doubles captain points.
+ * Applies auto-substitution, then doubles captain slot points.
  *
  * @param {string} userId
  * @param {string} roundId
@@ -73,33 +129,7 @@ export const calculateLockedGwScore = async (userId, roundId, pointDeductions = 
     const { data: picks, error: picksError } = await getGwPicksForRound(userId, roundId);
     if (picksError || !picks || picks.length === 0) return 0;
 
-    const starters = picks.filter(p => p.is_starter);
-    if (starters.length === 0) return 0;
-
-    const starterIds = starters.map(p => p.player_id);
-    const captainPick = starters.find(p => p.is_captain);
-    const captainPlayerId = captainPick?.player_id;
-
-    const { data: pointsData, error: pointsError } = await supabase
-      .from('player_round_points')
-      .select('player_id, points')
-      .eq('round_id', roundId)
-      .in('player_id', starterIds);
-
-    if (pointsError) throw pointsError;
-
-    const pointsMap = {};
-    pointsData?.forEach(item => {
-      pointsMap[item.player_id] = item.points;
-    });
-
-    let total = 0;
-    starters.forEach(pick => {
-      const pts = pointsMap[pick.player_id] || 0;
-      const multiplier = pick.player_id === captainPlayerId ? 2 : 1;
-      total += pts * multiplier;
-    });
-
+    const { total } = await scorePicksWithAutoSub(picks, roundId);
     return Math.max(0, total - pointDeductions);
   } catch (error) {
     console.error('Error calculating locked GW score:', error);

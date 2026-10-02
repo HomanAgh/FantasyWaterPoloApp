@@ -1,7 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { Icons } from '../assets/images/icons';
-import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 
 export default function LeaderboardItem({ entry, isCurrentUser, onKick, onLongPress }) {
   const getRankStyle = (rank) => {
@@ -14,11 +13,7 @@ export default function LeaderboardItem({ entry, isCurrentUser, onKick, onLongPr
   const content = (
     <>
       <View style={[styles.rankBadge, getRankStyle(entry.rank)]}>
-        {entry.rank <= 3 ? (
-          <Image source={Icons.badge} style={styles.rankEmoji} />
-        ) : (
-          <Text style={styles.rank}>{entry.rank}</Text>
-        )}
+        <Text style={styles.rank}>{entry.rank}</Text>
       </View>
       <View style={styles.leaderboardInfo}>
         <Text style={[styles.leaderboardName, isCurrentUser && styles.currentUserName]}>
@@ -27,18 +22,18 @@ export default function LeaderboardItem({ entry, isCurrentUser, onKick, onLongPr
         </Text>
         <View style={styles.leaderboardMeta}>
           <View style={styles.pointsContainer}>
-            <Text style={styles.leaderboardPoints}>{entry.total_points} pts</Text>
+            <Text style={styles.leaderboardPoints}>{entry.total_points} PTS</Text>
           </View>
           {entry.gameweeks_played > 0 && (
             <Text style={styles.gameweeksText}>
-              {entry.gameweeks_played} GW{entry.gameweeks_played !== 1 ? 's' : ''}
+              {entry.gameweeks_played} GW{entry.gameweeks_played !== 1 ? 'S' : ''}
             </Text>
           )}
         </View>
       </View>
       {onKick ? (
         <TouchableOpacity style={styles.kickButton} onPress={onKick} hitSlop={8}>
-          <Text style={styles.kickButtonText}>Kick</Text>
+          <Text style={styles.kickButtonText}>KICK</Text>
         </TouchableOpacity>
       ) : null}
     </>
@@ -53,7 +48,8 @@ export default function LeaderboardItem({ entry, isCurrentUser, onKick, onLongPr
         ]}
         onLongPress={onLongPress}
         delayLongPress={400}
-        activeOpacity={0.7}>
+        activeOpacity={0.7}
+      >
         {content}
       </TouchableOpacity>
     );
@@ -64,7 +60,8 @@ export default function LeaderboardItem({ entry, isCurrentUser, onKick, onLongPr
       style={[
         styles.leaderboardItem,
         isCurrentUser && styles.currentUserItem,
-      ]}>
+      ]}
+    >
       {content}
     </View>
   );
@@ -75,66 +72,60 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.oceanBright + '20',
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.auth.neonSoft,
   },
   currentUserItem: {
-    backgroundColor: colors.oceanBright + '10',
-    marginHorizontal: -spacing.lg,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.medium,
+    
+    marginHorizontal: -spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.small,
   },
   rankBadge: {
-    width: 50,
-    height: 50,
+    width: 42,
+    height: 42,
     borderRadius: borderRadius.round,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
-    ...shadows.small,
   },
   rankGold: {
-    backgroundColor: colors.sand + '30',
-    borderWidth: 2,
+    backgroundColor: 'rgba(255, 193, 7, 0.15)',
+    borderWidth: 0.5,
     borderColor: colors.sand,
   },
   rankSilver: {
-    backgroundColor: colors.pearl + '60',
-    borderWidth: 2,
-    borderColor: colors.oceanBright,
+    backgroundColor: 'rgba(0, 174, 239, 0.12)',
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
   },
   rankBronze: {
-    backgroundColor: colors.coral + '20',
-    borderWidth: 2,
+    backgroundColor: 'rgba(229, 57, 53, 0.15)',
+    borderWidth: 0.5,
     borderColor: colors.coral,
   },
   rankDefault: {
-    backgroundColor: colors.oceanMedium + '40',
-    borderWidth: 2,
-    borderColor: colors.oceanBright,
+    backgroundColor: colors.auth.inputBg,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neonSoft,
   },
   rank: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.textDark,
-  },
-  rankEmoji: {
-    width: 22,
-    height: 22,
-    resizeMode: 'contain',
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 24,
+    color: colors.white,
   },
   leaderboardInfo: {
     flex: 1,
   },
   leaderboardName: {
-    fontSize: 16,
-    color: colors.textDark,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 18,
+    color: colors.white,
+    marginBottom: 2,
   },
   currentUserName: {
-    color: colors.oceanDeep,
-    fontWeight: '700',
+    color: colors.white,
+    fontFamily: fonts.barlowCondensedSemiBold,
   },
   leaderboardMeta: {
     flexDirection: 'row',
@@ -142,35 +133,36 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   pointsContainer: {
-    backgroundColor: colors.sand + '25',
+    
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.round,
-    borderWidth: 1,
-    borderColor: colors.sand + '60',
+    paddingVertical: 2,
+    borderRadius: borderRadius.small,
+    borderWidth: 0.5,
+    borderColor: colors.sand,
   },
   leaderboardPoints: {
-    fontSize: 14,
-    color: colors.oceanDeep,
-    fontWeight: '600',
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 13,
+    color: colors.sand,
   },
   gameweeksText: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: '500',
+    color: colors.auth.placeholder,
   },
   kickButton: {
     marginLeft: spacing.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.small,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: colors.coral,
-    backgroundColor: colors.coral + '15',
+    backgroundColor: 'rgba(229, 57, 53, 0.15)',
   },
   kickButtonText: {
+    fontFamily: fonts.barlowCondensedBold,
     fontSize: 12,
-    fontWeight: '700',
     color: colors.coral,
+    letterSpacing: 0.5,
   },
 });

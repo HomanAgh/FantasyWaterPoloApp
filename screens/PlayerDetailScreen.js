@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 
 import { Icons } from '../assets/images/icons';
-import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { fetchPlayerDetail } from '../services/playerService';
 
 export default function PlayerDetailScreen({ route, navigation }) {
@@ -38,15 +38,8 @@ export default function PlayerDetailScreen({ route, navigation }) {
 
   const isGK = (detail?.position || playerPreview?.position) === 'GK';
 
-  const getFormColor = (pts) => {
-    if (pts >= 8) return colors.success;
-    if (pts >= 4) return colors.warning;
-    if (pts > 0) return colors.oceanMedium;
-    return colors.textMuted + '60';
-  };
-
   const formatMatchOpponent = (match) => {
-    if (!match?.fixture) return 'Unknown';
+    if (!match?.fixture) return { label: 'Unknown', round: '', status: null };
     const { fixture } = match;
     const homeTeam = fixture.home_team?.name || '?';
     const awayTeam = fixture.away_team?.name || '?';
@@ -60,144 +53,157 @@ export default function PlayerDetailScreen({ route, navigation }) {
     };
   };
 
-  const getMatchResult = (match) => {
-    if (!match?.fixture || match.fixture.status !== 'finished') return null;
-    return `${match.fixture.home_score ?? '-'}-${match.fixture.away_score ?? '-'}`;
-  };
-
-  // Use preview data for the header while full data loads
   const displayName = detail?.name || playerPreview?.name || '...';
   const displayTeam = detail?.team || playerPreview?.team || '';
-  const displayPosition = detail?.position || playerPreview?.position || '';
   const displayPrice = detail?.price ?? playerPreview?.price;
   const displayTotalPoints = detail?.totalPoints ?? playerPreview?.points ?? 0;
+  const displayPtsPerGame = detail?.pointsPerGame ?? '—';
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* ── Header ── */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.backButtonText}>‹ BACK</Text>
         </TouchableOpacity>
 
-        <View style={styles.headerBody}>
-        <Image source={isGK ? Icons.goalie : Icons.player} style={styles.positionEmoji} />
-          <Text style={styles.playerName}>{displayName}</Text>
-          <Text style={styles.playerTeam}>{displayTeam}</Text>
+        <Image
+          source={isGK ? Icons.goalie : Icons.player1}
+          style={styles.avatar}
+        />
+        <Text style={styles.playerName} numberOfLines={2}>
+          {displayName.toUpperCase()}
+        </Text>
+        {!!displayTeam && (
+          <Text style={styles.playerTeam}>{displayTeam.toUpperCase()}</Text>
+        )}
+        <View style={styles.positionBadge}>
+          <Text style={styles.positionBadgeText}>
+            {isGK ? 'GOALKEEPER' : 'FIELD PLAYER'}
+          </Text>
+        </View>
+      </View>
 
-          <View style={styles.headerBadges}>
-            <View style={styles.positionBadge}>
-              <Text style={styles.positionBadgeText}>
-                {isGK ? 'Goalkeeper' : 'Field Player'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.headerStats}>
-            <View style={styles.headerStatItem}>
-              <Text style={styles.headerStatValue}>
-                {displayPrice != null ? `$${displayPrice.toFixed(1)}M` : '-'}
-              </Text>
-              <Text style={styles.headerStatLabel}>Price</Text>
-            </View>
-            <View style={styles.headerStatDivider} />
-            <View style={styles.headerStatItem}>
-              <Text style={styles.headerStatValue}>{displayTotalPoints}</Text>
-              <Text style={styles.headerStatLabel}>Total Pts</Text>
-            </View>
-            {detail && (
-              <>
-                <View style={styles.headerStatDivider} />
-                <View style={styles.headerStatItem}>
-                  <Text style={styles.headerStatValue}>{detail.pointsPerGame}</Text>
-                  <Text style={styles.headerStatLabel}>Pts/Game</Text>
-                </View>
-              </>
-            )}
-          </View>
+      {/* ── Key metrics ── */}
+      <View style={styles.metricsRow}>
+        <View style={styles.metricBox}>
+          <Text style={styles.metricLabel}>PRICE</Text>
+          <Text style={styles.metricValue}>
+            {displayPrice != null ? `$${Number(displayPrice).toFixed(1)}M` : '—'}
+          </Text>
+        </View>
+        <View style={styles.metricBox}>
+          <Text style={styles.metricLabel}>TOTAL PTS</Text>
+          <Text style={styles.metricValue}>{displayTotalPoints}</Text>
+        </View>
+        <View style={styles.metricBox}>
+          <Text style={styles.metricLabel}>PTS/GAME</Text>
+          <Text style={styles.metricValue}>{displayPtsPerGame}</Text>
         </View>
       </View>
 
       {loading && (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.oceanMedium} />
-          <Text style={styles.loadingText}>Loading stats...</Text>
+          <ActivityIndicator size="large" color={colors.auth.neon} />
+          <Text style={styles.loadingText}>LOADING STATS...</Text>
         </View>
       )}
 
       {error && !loading && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>⚠️ {error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadDetail}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+        <View style={styles.emptyCard}>
+          <Image source={Icons.warning} style={styles.emptyIcon} />
+          <Text style={styles.emptyTitle}>{error.toUpperCase()}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadDetail} activeOpacity={0.8}>
+            <Text style={styles.retryButtonText}>RETRY</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {detail && !loading && (
         <>
-          {/* Season Stats Grid */}
+          {/* ── Season Stats ── */}
           <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <Image source={Icons.graph} style={styles.sectionTitleIcon} />
-            <Text style={styles.sectionTitle}>Season Stats</Text>
-          </View>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitleInline}>SEASON STATS</Text>
+            </View>
             <View style={styles.statsGrid}>
               {isGK ? (
                 <>
-                  <StatCell label="Saves" value={detail.totalSaves} icon={Icons.gloves} />
-                  <StatCell label="Clean Sheet Periods" value={detail.totalCleanSheets} icon={Icons.cleansheet} />
-                  <StatCell label="Blocks" value={detail.totalBlocks} icon={Icons.block} />
-                  <StatCell label="Sprints" value={detail.totalSprints} icon={Icons.sprint} />
-                  <StatCell label="Games" value={detail.gamesPlayed} icon={Icons.games} />
-                  <StatCell label="Minutes" value={detail.totalMinutes} icon={Icons.clock} />
-                  <StatCell label="Red Cards" value={detail.totalReds} icon={Icons.redCard} danger={detail.totalReds > 0} />
+                  <StatCell label="SAVES" value={detail.totalSaves} icon={Icons.handsave} />
+                  <StatCell label="PEN SAVE" value={detail.totalPenaltySaves} icon={Icons.penaltysave} />
+                  <StatCell label="CLEAN SHEET" value={detail.totalCleanSheets} icon={Icons.clean} />
+                  <StatCell label="ASSISTS" value={detail.totalAssists} icon={Icons.handshake} />
+                  <StatCell label="GOALS" value={detail.totalGoals} icon={Icons.goal} />
+                  <StatCell label="GAMES" value={detail.gamesPlayed} icon={Icons.miniball} />
+                  <StatCell label="FOULS DRAWN" value={detail.totalFoulsDrawn} icon={Icons.whistle} />
+                  <StatCell
+                    label="RED CARD"
+                    value={detail.totalReds}
+                    icon={Icons.redCard}
+                    danger={detail.totalReds > 0}
+                  />
                 </>
               ) : (
                 <>
-                  <StatCell label="Goals" value={detail.totalGoals} icon={Icons.goal} />
-                  <StatCell label="Assists" value={detail.totalAssists} icon={Icons.handshake} />
-                  <StatCell label="Blocks" value={detail.totalBlocks} icon={Icons.block} />
-                  <StatCell label="Sprints" value={detail.totalSprints} icon={Icons.sprint} />
-                  <StatCell label="Clean Sheet Periods" value={detail.totalCleanSheets} icon={Icons.cleansheet} />
-                  <StatCell label="Games" value={detail.gamesPlayed} icon={Icons.games} />
-                  <StatCell label="Minutes" value={detail.totalMinutes} icon={Icons.clock} />
-                  <StatCell label="Red Cards" value={detail.totalReds} icon={Icons.redCard} danger={detail.totalReds > 0} />
+                  <StatCell label="GOALS" value={detail.totalGoals} icon={Icons.goal} />
+                  <StatCell label="ASSISTS" value={detail.totalAssists} icon={Icons.handshake} />
+                  <StatCell label="BLOCKS" value={detail.totalBlocks} icon={Icons.stopp} />
+                  <StatCell label="SPRINTS" value={detail.totalSprints} icon={Icons.tinyswimmer} />
+                  <StatCell label="CLEAN SHEET" value={detail.totalCleanSheets} icon={Icons.clean} />
+                  <StatCell label="GAMES" value={detail.gamesPlayed} icon={Icons.miniball} />
+                  <StatCell label="FOULS DRAWN" value={detail.totalFoulsDrawn} icon={Icons.whistle} />
+                  <StatCell
+                    label="RED CARD"
+                    value={detail.totalReds}
+                    icon={Icons.redCard}
+                    danger={detail.totalReds > 0}
+                  />
                 </>
               )}
             </View>
           </View>
 
-          {/* GW Form Strip */}
-          {detail.formHistory.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.sectionTitleRow}>
-                <Image source={Icons.graph} style={styles.sectionTitleIcon} />
-                <Text style={styles.sectionTitle}>Recent Form</Text>
-              </View>
-              <View style={styles.formStrip}>
-                {detail.formHistory.map((gw, i) => (
-                  <View key={i} style={styles.formItem}>
-                    <View style={[styles.formCircle, { backgroundColor: getFormColor(gw.points) }]}>
-                      <Text style={styles.formCircleText}>{gw.points}</Text>
-                    </View>
-                    {gw.roundNumber != null && (
-                      <Text style={styles.formLabel}>GW{gw.roundNumber}</Text>
-                    )}
-                  </View>
-                ))}
-              </View>
+          {/* ── Recent Form ── */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitleInline}>RECENT FORM</Text>
+              <Image source={Icons.graph} style={[styles.sectionHeaderIcon, styles.iconNeon]} />
             </View>
-          )}
 
-          {/* Recent Match Log */}
-          {detail.recentMatches.length > 0 ? (
-            <View style={styles.section}>
-              <View style={styles.sectionTitleRow}>
-                <Image source={Icons.calendar} style={styles.sectionTitleIcon} />
-                <Text style={styles.sectionTitle}>Recent Matches</Text>
-              </View>
-              {detail.recentMatches.map((match, i) => {
+            <View style={styles.formStrip}>
+              {(detail.formHistory?.length > 0
+                ? detail.formHistory
+                : [{ points: '0', roundNumber: 1 }, { points: '0', roundNumber: 2 }, { points: '0', roundNumber: 3 }]
+              ).map((gw, i) => (
+                <View key={i} style={styles.formItem}>
+                  <View style={styles.formCircle}>
+                    <Text style={styles.formCircleText}>{gw.points}</Text>
+                  </View>
+                  <Text style={styles.formLabel}>
+                    GW{gw.roundNumber != null ? gw.roundNumber : i + 1}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* ── Recent Matches ── */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitleInline}>RECENT MATCHES</Text>
+              <Image source={Icons.swimmer} style={[styles.sectionHeaderIcon, styles.iconNeon]} />
+            </View>
+
+            {detail.recentMatches?.length > 0 ? (
+              detail.recentMatches.map((match, i) => {
                 const opp = formatMatchOpponent(match);
                 return (
                   <View key={i} style={styles.matchRow}>
@@ -210,75 +216,54 @@ export default function PlayerDetailScreen({ route, navigation }) {
                     <View style={styles.matchStats}>
                       {isGK ? (
                         <>
-                          {match.saves > 0 && <MatchStat label="Saves" value={match.saves} />}
-                          {match.goals > 0 && <MatchStat label="Goals" value={match.goals} />}
+                          {match.saves > 0 && <MatchStat label="SVS" value={match.saves} />}
+                          {match.penaltySaves > 0 && <MatchStat label="PS" value={match.penaltySaves} />}
+                          {match.goals > 0 && <MatchStat label="GLS" value={match.goals} />}
                         </>
                       ) : (
                         <>
-                          {match.goals > 0 && <MatchStat label="Goals" value={match.goals} />}
-                          {match.assists > 0 && <MatchStat label="Ass" value={match.assists} />}
+                          {match.goals > 0 && <MatchStat label="GLS" value={match.goals} />}
+                          {match.assists > 0 && <MatchStat label="ASS" value={match.assists} />}
                         </>
                       )}
-                      {match.blocks > 0 && <MatchStat label="Blc" value={match.blocks} />}
-                      {match.sprints > 0 && <MatchStat label="Spr" value={match.sprints} />}
+                      {match.blocks > 0 && !isGK && <MatchStat label="BLC" value={match.blocks} />}
+                      {match.sprints > 0 && !isGK && <MatchStat label="SPR" value={match.sprints} />}
+                      {match.foulsDrawn > 0 && <MatchStat label="PFD" value={match.foulsDrawn} />}
                       {match.cleanSheets > 0 && (
-                        <Text style={styles.cardIcon}>🧱×{match.cleanSheets}</Text>
-                      )}
-                      {match.yellowCards > 0 && (
-                        <Text style={styles.cardIcon}>🟨</Text>
+                        <MatchStat label="CS" value={match.cleanSheets} />
                       )}
                       {match.redCards > 0 && (
-                        <Text style={styles.cardIcon}>🟥</Text>
+                        <Image source={Icons.redCard} style={styles.matchRedIcon} />
                       )}
                     </View>
-                    <View style={[
-                      styles.matchPointsBadge,
-                      match.pointsEarned >= 8 && styles.matchPointsHigh,
-                      match.pointsEarned >= 4 && match.pointsEarned < 8 && styles.matchPointsMid,
-                    ]}>
+                    <View style={styles.matchPointsBadge}>
                       <Text style={styles.matchPointsText}>{match.pointsEarned}</Text>
-                      <Text style={styles.matchPointsLabel}>pts</Text>
+                      <Text style={styles.matchPointsLabel}>PTS</Text>
                     </View>
                   </View>
                 );
-              })}
-            </View>
-          ) : (
-            <View style={styles.section}>
-              <View style={styles.sectionTitleRow}>
-                <Image source={Icons.calendar} style={styles.sectionTitleIcon} />
-                <Text style={styles.sectionTitle}>Recent Matches</Text>
+              })
+            ) : (
+              <View style={styles.emptyMatches}>
+                <Image source={Icons.bigcalender} style={styles.emptyMatchesIcon} />
+                <Text style={styles.emptyMatchesText}>NO MATCH DATA AVAILABLE YET</Text>
               </View>
-              <View style={styles.emptySection}>
-                <Text style={styles.emptySectionText}>No match data available yet</Text>
-              </View>
-            </View>
-          )}
+            )}
+          </View>
         </>
       )}
-
-      <View style={styles.bottomPad} />
     </ScrollView>
   );
 }
 
-function StatCell({ label, value, emoji, icon, accent, danger, highlight }) {
+function StatCell({ label, value, icon, danger }) {
   return (
-    <View style={[
-      styles.statCell,
-      accent && styles.statCellAccent,
-      danger && styles.statCellDanger,
-      highlight && styles.statCellHighlight,
-    ]}>
-      {icon
-        ? <Image source={icon} style={styles.statCellIcon} />
-        : <Text style={styles.statCellEmoji}>{emoji}</Text>
-      }
-      <Text style={[
-        styles.statCellValue,
-        danger && styles.statCellDangerText,
-        highlight && styles.statCellHighlightText,
-      ]}>
+    <View style={[styles.statCell, danger && styles.statCellDanger]}>
+      <Image
+        source={icon}
+        style={[styles.statCellIcon, styles.iconNeon, danger && styles.iconDanger]}
+      />
+      <Text style={[styles.statCellValue, danger && styles.statCellDangerText]}>
         {value}
       </Text>
       <Text style={styles.statCellLabel}>{label}</Text>
@@ -297,267 +282,283 @@ function MatchStat({ label, value }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: 'transparent',
   },
-  header: {
-    backgroundColor: colors.oceanDeep,
-    paddingTop: 56,
+  scrollContent: {
     paddingBottom: spacing.xl,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    ...shadows.large,
+  },
+
+  header: {
+    paddingTop: 56,
+    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
   },
   backButton: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
+    alignSelf: 'flex-start',
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   backButtonText: {
-    color: colors.oceanBright,
-    fontSize: 15,
-    fontWeight: '600',
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 14,
+    color: colors.auth.neon,
+    letterSpacing: 1,
   },
-  headerBody: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  positionEmoji: {
-    width: 64,
-    height: 64,
-    marginBottom: spacing.sm,
+  avatar: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    marginBottom: spacing.md,
     resizeMode: 'contain',
   },
   playerName: {
-    fontSize: 26,
-    fontWeight: 'bold',
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 42,
     color: colors.white,
+    letterSpacing: 1,
     textAlign: 'center',
     marginBottom: 4,
   },
   playerTeam: {
+    fontFamily: fonts.barlowCondensedMedium,
     fontSize: 16,
-    color: colors.oceanBright,
-    fontWeight: '600',
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
     marginBottom: spacing.sm,
   },
-  headerBadges: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
   positionBadge: {
-    backgroundColor: colors.oceanBright + '30',
+    borderWidth: 0.5,
+    borderColor: colors.sand,
+    borderRadius: borderRadius.small,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.round,
-    borderWidth: 1,
-    borderColor: colors.oceanBright,
+    paddingVertical: 4,
+    backgroundColor: colors.auth.inputBg,
   },
   positionBadgeText: {
-    color: colors.white,
-    fontSize: 13,
-    fontWeight: '700',
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 16,
+    color: colors.sand,
+    letterSpacing: 1,
   },
-  headerStats: {
+
+  metricsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: borderRadius.large,
+    gap: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  metricBox: {
+    flex: 1,
+    backgroundColor: colors.auth.glass,
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
-  },
-  headerStatItem: {
+    paddingHorizontal: spacing.sm,
     alignItems: 'center',
-    minWidth: 60,
+    minHeight: 72,
+    justifyContent: 'center',
   },
-  headerStatValue: {
-    fontSize: 22,
-    fontWeight: 'bold',
+  metricLabel: {
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 16,
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  metricValue: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 28,
     color: colors.white,
   },
-  headerStatLabel: {
-    fontSize: 11,
-    color: colors.oceanBright,
-    fontWeight: '600',
-    marginTop: 2,
+
+  iconNeon: {
+    tintColor: colors.auth.neon,
   },
-  headerStatDivider: {
-    width: 1,
-    height: 36,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+  iconDanger: {
+    tintColor: colors.coral,
   },
+
   loadingContainer: {
-    padding: spacing.xxl,
+    paddingVertical: spacing.xxl,
     alignItems: 'center',
   },
   loadingText: {
-    fontSize: 15,
-    color: colors.textMuted,
     marginTop: spacing.md,
-    fontWeight: '600',
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 14,
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
   },
-  errorContainer: {
-    padding: spacing.xl,
+
+  emptyCard: {
+    marginHorizontal: spacing.md,
+    backgroundColor: colors.auth.glass,
+    borderRadius: borderRadius.large,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
     alignItems: 'center',
   },
-  errorText: {
-    fontSize: 15,
-    color: colors.textMuted,
+  emptyIcon: {
+    width: 48,
+    height: 48,
+    resizeMode: 'contain',
     marginBottom: spacing.md,
+  },
+  emptyTitle: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 16,
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
     textAlign: 'center',
+    marginBottom: spacing.md,
   },
   retryButton: {
-    backgroundColor: colors.oceanMedium,
-    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
   },
   retryButtonText: {
-    color: colors.white,
-    fontWeight: '700',
-    fontSize: 15,
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 14,
+    color: colors.auth.neon,
+    letterSpacing: 1,
   },
+
   section: {
-    margin: spacing.md,
-    marginBottom: 0,
-    backgroundColor: colors.pearl,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    backgroundColor: colors.auth.glass,
     borderRadius: borderRadius.large,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
     padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.sand + '50',
-    ...shadows.small,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textDark,
-  },
-  sectionTitleRow: {
+  sectionHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: spacing.sm,
+    marginHorizontal: -spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    marginBottom: spacing.md,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.auth.neon,
   },
-  sectionTitleIcon: {
-    width: 20,
-    height: 20,
+  sectionTitleInline: {
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 20,
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+  sectionHeaderIcon: {
+    width: 22,
+    height: 22,
     resizeMode: 'contain',
   },
+
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
   statCell: {
-    backgroundColor: colors.pearl,
+    width: '23%',
+    flexGrow: 1,
+    minWidth: '20%',
+    backgroundColor: colors.auth.inputBg,
     borderRadius: borderRadius.medium,
-    padding: spacing.md,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: 4,
     alignItems: 'center',
-    flex: 1,
-    minWidth: '30%',
-    ...shadows.small,
-    borderWidth: 1,
-    borderColor: colors.sand + '40',
-  },
-  statCellAccent: {
-    borderColor: colors.sand,
-    backgroundColor: colors.sand + '10',
   },
   statCellDanger: {
-    borderColor: colors.coral + '80',
-    backgroundColor: colors.coral + '10',
-  },
-  statCellHighlight: {
-    borderColor: colors.sand + '80',
-    backgroundColor: colors.sand + '18',
-  },
-  statCellEmoji: {
-    fontSize: 22,
-    marginBottom: 4,
+    borderColor: colors.coral,
   },
   statCellIcon: {
-    width: 28,
-    height: 28,
+    width: 22,
+    height: 22,
     marginBottom: 4,
     resizeMode: 'contain',
   },
   statCellValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.oceanDeep,
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 22,
+    color: colors.white,
   },
   statCellDangerText: {
-    color: colors.error,
-  },
-  statCellHighlightText: {
-    color: colors.oceanDeep,
+    color: colors.coral,
   },
   statCellLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: '600',
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 10,
+    color: colors.auth.statLabel,
+    letterSpacing: 0.5,
     marginTop: 2,
     textAlign: 'center',
   },
+
   formStrip: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    backgroundColor: colors.pearl,
-    borderRadius: borderRadius.medium,
-    padding: spacing.md,
-    gap: spacing.sm,
-    ...shadows.small,
     justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
   },
   formItem: {
     alignItems: 'center',
-    gap: 4,
+    gap: 10,
   },
   formCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    borderWidth: 3.5,
+    borderColor: colors.auth.neon,
     alignItems: 'center',
-    ...shadows.small,
+    justifyContent: 'center',
   },
   formCircleText: {
-    fontSize: 15,
-    fontWeight: 'bold',
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 36,
     color: colors.white,
+    lineHeight: 40,
   },
   formLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: '600',
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 13,
+    color: colors.white,
+    letterSpacing: 0.5,
   },
+
   matchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.pearl,
-    borderRadius: borderRadius.medium,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    ...shadows.small,
-    borderWidth: 1,
-    borderColor: colors.sand + '40',
-    borderLeftWidth: 4,
-    borderLeftColor: colors.sand,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.auth.neonSoft,
   },
   matchLeft: {
     flex: 1,
     marginRight: spacing.sm,
   },
   matchRound: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.oceanMedium,
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 12,
+    color: colors.auth.neon,
+    letterSpacing: 0.5,
     marginBottom: 2,
   },
   matchLabel: {
-    fontSize: 13,
-    color: colors.textDark,
-    fontWeight: '500',
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 14,
+    color: colors.white,
   },
   matchStats: {
     flexDirection: 'row',
@@ -566,56 +567,60 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   matchStatPill: {
-    backgroundColor: colors.oceanBright + '25',
+    backgroundColor: colors.auth.inputBg,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neonSoft,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
-    borderRadius: borderRadius.round,
+    borderRadius: borderRadius.small,
   },
   matchStatText: {
-    fontSize: 12,
-    color: colors.oceanDeep,
-    fontWeight: '700',
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 11,
+    color: colors.auth.statLabel,
   },
-  cardIcon: {
-    fontSize: 16,
+  matchRedIcon: {
+    width: 14,
+    height: 14,
+    resizeMode: 'contain',
   },
   matchPointsBadge: {
-    backgroundColor: colors.textMuted + '20',
+    backgroundColor: colors.auth.inputBg,
+    borderWidth: 0.5,
+    borderColor: colors.sand,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.small,
     alignItems: 'center',
-    minWidth: 40,
-  },
-  matchPointsHigh: {
-    backgroundColor: colors.success + '25',
-  },
-  matchPointsMid: {
-    backgroundColor: colors.warning + '25',
+    minWidth: 42,
   },
   matchPointsText: {
+    fontFamily: fonts.barlowCondensedExtraBold,
     fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.textDark,
+    color: colors.sand,
   },
   matchPointsLabel: {
-    fontSize: 10,
-    color: colors.textMuted,
-    fontWeight: '600',
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 9,
+    color: colors.auth.statLabel,
+    letterSpacing: 0.5,
   },
-  emptySection: {
-    backgroundColor: colors.pearl,
-    borderRadius: borderRadius.medium,
-    padding: spacing.xl,
+
+  emptyMatches: {
     alignItems: 'center',
-    ...shadows.small,
+    paddingVertical: spacing.xl,
   },
-  emptySectionText: {
-    fontSize: 14,
-    color: colors.textMuted,
-    fontWeight: '500',
+  emptyMatchesIcon: {
+    width: 80,
+    height: 80,
+    resizeMode: 'contain',
+    marginBottom: spacing.lg,
   },
-  bottomPad: {
-    height: spacing.xl,
+  emptyMatchesText: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 18,
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
+    textAlign: 'center',
   },
 });

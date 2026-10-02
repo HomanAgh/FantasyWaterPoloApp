@@ -9,11 +9,14 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  ScrollView,
   Image,
 } from 'react-native';
-import { Icons } from '../assets/images/icons';
-import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import * as userProfileService from '../services/userProfileService';
+
+// Same Figma title export as AuthScreen — drop into assets/images/ then set:
+const AUTH_TITLE = null; // require('../assets/images/auth-title.png')
 
 /**
  * Onboarding screen for new users to set their team name
@@ -25,11 +28,6 @@ const OnboardingScreen = ({ userId, onComplete }) => {
   const [teamName, setTeamName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  /**
-   * Validate team name
-   * @param {string} name - Team name to validate
-   * @returns {Object} { isValid: boolean, error: string }
-   */
   const validateTeamName = (name) => {
     const trimmed = name.trim();
 
@@ -45,7 +43,6 @@ const OnboardingScreen = ({ userId, onComplete }) => {
       return { isValid: false, error: 'Team name must be less than 30 characters' };
     }
 
-    // Check for invalid characters (allow letters, numbers, spaces, and basic punctuation)
     const validPattern = /^[a-zA-Z0-9\s\-_'!]+$/;
     if (!validPattern.test(trimmed)) {
       return { isValid: false, error: 'Team name contains invalid characters' };
@@ -54,9 +51,6 @@ const OnboardingScreen = ({ userId, onComplete }) => {
     return { isValid: true, error: '' };
   };
 
-  /**
-   * Handle team creation
-   */
   const handleCreateTeam = async () => {
     const validation = validateTeamName(teamName);
 
@@ -80,8 +74,6 @@ const OnboardingScreen = ({ userId, onComplete }) => {
       }
 
       console.log('[OnboardingScreen] Profile created successfully:', data);
-
-      // Call onComplete callback to proceed to main app
       onComplete(teamName.trim());
     } catch (error) {
       console.error('[OnboardingScreen] Error creating profile:', error);
@@ -91,206 +83,184 @@ const OnboardingScreen = ({ userId, onComplete }) => {
     }
   };
 
-  return (
+  const renderHero = () => {
+    if (AUTH_TITLE) {
+      return (
+        <Image source={AUTH_TITLE} style={styles.titleImage} resizeMode="contain" />
+      );
+    }
+
+    return (
+      <View style={styles.heroFallback}>
+        <Text style={styles.welcomeChip}>WELCOME TO</Text>
+        <Text style={styles.appTitle}>FANTASY{'\n'}WATER POLO</Text>
+        <View style={styles.ribbon}>
+          <Text style={styles.ribbonText}>DIVE INTO THE ACTION</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const content = (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Ocean-themed background */}
-      <View style={styles.backgroundWaves}>
-        <Image source={Icons.wave} style={styles.waveTop} />
-        <Image source={Icons.wave} style={styles.waveBottom} />
-      </View>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.hero}>{renderHero()}</View>
 
-      <View style={styles.content}>
-        {/* Header with water polo theme */}
-        <View style={styles.header}>
-          <Image source={Icons.player} style={styles.iconLarge} />
-          <Text style={styles.welcomeText}>Welcome to</Text>
-          <Text style={styles.appTitle}>Fantasy Water Polo</Text>
-          <View style={styles.subtitleRow}>
-            <Text style={styles.subtitle}>Dive into the action!</Text>
-            <Image source={Icons.water} style={styles.subtitleIcon} />
-          </View>
-        </View>
-
-        {/* Input Card */}
-        <View style={styles.inputCard}>
+        <View style={styles.card}>
           <Text style={styles.label}>What's your team name?</Text>
           <TextInput
             style={styles.input}
             value={teamName}
             onChangeText={setTeamName}
-            placeholder="Enter your team name..."
-            placeholderTextColor={colors.textMuted}
+            placeholder="Enter your team name"
+            placeholderTextColor={colors.auth.placeholder}
             maxLength={30}
-            autoFocus={true}
+            autoFocus
             editable={!isLoading}
           />
-          <Text style={styles.hint}>3-30 characters • Letters, numbers & spaces</Text>
+          <Text style={styles.hint}>3-30 characters. Letters, numbers & spaces.</Text>
         </View>
 
-        {/* Create Button */}
         <TouchableOpacity
-          style={[
-            styles.button,
-            isLoading && styles.buttonDisabled,
-          ]}
+          style={[styles.button, isLoading && styles.buttonDisabled]}
           onPress={handleCreateTeam}
           disabled={isLoading}
         >
           {isLoading ? (
             <ActivityIndicator color={colors.white} />
           ) : (
-            <>
-              <Text style={styles.buttonText}>Create My Team</Text>
-              <Image source={Icons.goal} style={styles.buttonEmoji} />
-            </>
+            <Text style={styles.buttonText}>CREATE MY TEAM</Text>
           )}
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
+
+  return <View style={styles.container}>{content}</View>;
 };
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
   },
-  backgroundWaves: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    overflow: 'hidden',
-  },
-  waveTop: {
-    position: 'absolute',
-    top: -20,
-    right: -20,
-    width: 150,
-    height: 150,
-    opacity: 0.1,
-    resizeMode: 'contain',
-    transform: [{ rotate: '45deg' }],
-  },
-  waveBottom: {
-    position: 'absolute',
-    bottom: -20,
-    left: -20,
-    width: 150,
-    height: 150,
-    opacity: 0.1,
-    resizeMode: 'contain',
-    transform: [{ rotate: '-45deg' }],
-  },
-  content: {
-    flex: 1,
+  scroll: {
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    zIndex: 1,
+    paddingVertical: spacing.xl,
   },
-  header: {
+  hero: {
+    width: '100%',
     alignItems: 'center',
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.lg,
   },
-  iconLarge: {
-    width: 100,
-    height: 100,
-    marginBottom: spacing.md,
-    resizeMode: 'contain',
+  titleImage: {
+    width: '100%',
+    height: 180,
   },
-  welcomeText: {
-    fontSize: 20,
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
+  heroFallback: {
+    alignItems: 'center',
+    paddingTop: spacing.md,
   },
-  appTitle: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: colors.oceanDeep,
-    textAlign: 'center',
+  welcomeChip: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: colors.white,
+    backgroundColor: colors.auth.buttonBottom,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    overflow: 'hidden',
     marginBottom: spacing.sm,
   },
-  subtitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+  appTitle: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 34,
+    color: colors.white,
+    textAlign: 'center',
+    lineHeight: 38,
+    letterSpacing: 1,
+    textShadowColor: colors.auth.neon,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
-  subtitle: {
-    fontSize: 16,
-    color: colors.oceanMedium,
-    fontWeight: '600',
+  ribbon: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.sand,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 6,
+    transform: [{ rotate: '-2deg' }],
   },
-  subtitleIcon: {
-    width: 16,
-    height: 16,
-    resizeMode: 'contain',
+  ribbonText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: colors.oceanDeep,
   },
-  inputCard: {
+  card: {
     width: '100%',
-    backgroundColor: colors.pearl,
+    backgroundColor: colors.auth.glass,
     borderRadius: borderRadius.large,
     padding: spacing.lg,
-    marginBottom: spacing.xl,
-    ...shadows.medium,
-    borderWidth: 2,
-    borderColor: colors.oceanBright + '30',
+    marginBottom: spacing.lg,
+    borderWidth: 1.5,
+    borderColor: colors.auth.neon,
   },
   label: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.oceanDeep,
-    marginBottom: spacing.md,
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 20,
+    color: colors.white,
     textAlign: 'center',
+    marginBottom: spacing.md,
   },
   input: {
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: colors.auth.inputBg,
     borderRadius: borderRadius.medium,
+    borderWidth: 1.5,
+    borderColor: colors.auth.neon,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: 18,
-    color: colors.textDark,
-    borderWidth: 2,
-    borderColor: colors.oceanMedium,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 10,
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 16,
+    color: colors.white,
     textAlign: 'center',
-    fontWeight: '600',
   },
   hint: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 14,
+    color: colors.auth.placeholder,
     textAlign: 'center',
     marginTop: spacing.sm,
   },
   button: {
-    backgroundColor: colors.oceanMedium,
-    borderRadius: borderRadius.large,
-    paddingVertical: spacing.md + 2,
-    paddingHorizontal: spacing.xxl,
-    minWidth: 220,
+    width: '100%',
+    backgroundColor: colors.auth.buttonTop,
+    borderRadius: borderRadius.round,
+    paddingVertical: spacing.md + 4,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    ...shadows.large,
-    borderWidth: 3,
-    borderColor: colors.oceanDeep,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
     color: colors.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginRight: spacing.sm,
-  },
-  buttonEmoji: {
-    width: 20,
-    height: 20,
-    resizeMode: 'contain',
+    fontSize: 24,
+    letterSpacing: 1,
   },
 });
 

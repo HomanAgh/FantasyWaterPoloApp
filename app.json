@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "com.fantasywaterpolo.app",
-      "versionCode": 2
+      "versionCode": 3
     },
     "extra": {
       "eas": {

@@ -126,47 +126,59 @@ WHERE id = 'fixture-uuid';
 ```sql
 INSERT INTO player_match_stats
   (fixture_id, player_id, goals, assists, saves, penalty_saves,
-   minutes_played, appeared, yellow_cards, red_cards, clean_sheets, blocks, sprints)
+   appeared, red_cards, clean_sheets, blocks, sprints, fouls_drawn)
 VALUES
-  ('fixture-uuid', 'player-uuid', 2, 1, 0, 0, 32, true, 0, 0, 0, 0, 0)
+  ('fixture-uuid', 'player-uuid', 2, 1, 0, 0, true, 0, 0, 0, 0, 0)
 ON CONFLICT (fixture_id, player_id)
 DO UPDATE SET
   goals          = EXCLUDED.goals,
   assists        = EXCLUDED.assists,
   saves          = EXCLUDED.saves,
   penalty_saves  = EXCLUDED.penalty_saves,
-  minutes_played = EXCLUDED.minutes_played,
   appeared       = EXCLUDED.appeared,
-  yellow_cards   = EXCLUDED.yellow_cards,
   red_cards      = EXCLUDED.red_cards,
   clean_sheets   = EXCLUDED.clean_sheets,
   blocks         = EXCLUDED.blocks,
-  sprints        = EXCLUDED.sprints;
+  sprints        = EXCLUDED.sprints,
+  fouls_drawn    = EXCLUDED.fouls_drawn;
 ```
 
 **Important**: Do NOT include `points_earned` in the insert — the database trigger calculates it automatically based on the scoring rules below.
 
 **Re-running the query is safe**: the `ON CONFLICT` clause means running it again with updated values will overwrite the previous entry for that player/fixture combination.
 
-#### Scoring Rules (as of migration 009)
+#### Scoring Rules (as of migration 019)
+
+**Outfield**
 
 | Stat | Points |
 |------|--------|
-| Goal | +4 pts each |
+| Goal | +5 pts each |
 | Assist | +3 pts each |
-| Save | +1 pt per 2 saves (floor) |
-| Penalty save | +3 pts each |
 | Appearance (`appeared = true`) | +1 pt |
 | Block | +2 pts each |
 | Sprint | +2 pts each |
-| Clean sheet period — GK | +5 pts per period |
-| Clean sheet period — Outfield | +1 pt per period |
-| Yellow card | no points effect (tracked for records only) |
+| Personal foul drawn | +2 pts each |
+| Clean sheet period | +1 pt per period |
+| Red card | -10 pts each |
+
+**Goalkeeper**
+
+| Stat | Points |
+|------|--------|
+| Goal | +5 pts each |
+| Assist | +3 pts each |
+| Save | +1 pt each |
+| Penalty save | +5 pts each |
+| Appearance (`appeared = true`) | +1 pt |
+| Personal foul drawn | +2 pts each |
+| Clean sheet period | +10 pts per period |
 | Red card | -10 pts each |
 
 **Tips**:
 - `clean_sheets` is an integer representing how many periods had no goals conceded (0–4)
-- `appeared` should be `true` if the player played any minutes, `false` if they did not play
+- `appeared` should be `true` if the player played, `false` if they did not
+- Outfield do not score for saves/penalty saves; GKs do not score for blocks/sprints
 - Add stats for all players who appeared — the app shows the top 3 performers sorted by points automatically
 
 ## Database Schema Reference
@@ -196,12 +208,11 @@ DO UPDATE SET
 | assists | INTEGER | Assists made |
 | saves | INTEGER | Saves made |
 | penalty_saves | INTEGER | Penalty saves made |
-| minutes_played | INTEGER | Minutes played |
 | appeared | BOOLEAN | Whether the player played at all |
 | blocks | INTEGER | Blocks made |
 | sprints | INTEGER | Sprints made |
+| fouls_drawn | INTEGER | Personal fouls drawn |
 | clean_sheets | INTEGER | Number of periods with no goals conceded (0–4) |
-| yellow_cards | INTEGER | Yellow cards received (tracked, not scored) |
 | red_cards | INTEGER | Red cards received |
 | points_earned | INTEGER | Auto-calculated by DB trigger — do not set manually |
 
