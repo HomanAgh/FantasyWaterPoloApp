@@ -10,7 +10,7 @@ import {
   Image,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
-import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
 import PitchView from '../components/PitchView';
@@ -19,9 +19,8 @@ export default function TransfersScreen({ navigation }) {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Get team data from context
-  const { 
-    selectedPlayers, 
+  const {
+    selectedPlayers,
     removePlayer,
     remainingBudget,
     totalSpent,
@@ -33,63 +32,44 @@ export default function TransfersScreen({ navigation }) {
     transfersMadeThisRound,
     pendingDeductions,
     isUnlimitedPhase,
+    MAX_PLAYERS,
+    MAX_OUTFIELD,
+    MAX_SUBSTITUTES,
   } = useTeam();
 
-  // Get round info from context
   const { currentRound, isLocked, timeToDeadline, formatDeadline } = useRound();
 
-  /**
-   * Handle player card press - show replace modal
-   */
   const handlePlayerPress = (playerId, player) => {
     if (isLocked) return;
     setSelectedPlayer(player);
     setModalVisible(true);
   };
 
-  /**
-   * Handle empty slot press - navigate to Players screen
-   */
   const handleEmptySlotPress = (position, isStarter) => {
     if (isLocked) return;
-    
-    // Navigate to Players screen and let user add a player
     navigation.navigate('Players', {
       filterPosition: position,
       mode: 'add',
     });
   };
 
-  /**
-   * Handle replace player - navigate to Players screen with filter
-   */
   const handleReplacePlayer = () => {
     setModalVisible(false);
-    
-    // Navigate to Players screen with replacement context
     navigation.navigate('Players', {
       replacingPlayer: selectedPlayer,
       filterPosition: selectedPlayer.position,
       mode: 'replace',
     });
-    
     setSelectedPlayer(null);
   };
 
-  /**
-   * Handle remove player
-   */
   const handleRemovePlayer = async () => {
     setModalVisible(false);
-    
     Alert.alert(
       'Remove Player',
       `Are you sure you want to remove ${selectedPlayer.name} from your team?`,
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove',
           style: 'destructive',
@@ -102,205 +82,192 @@ export default function TransfersScreen({ navigation }) {
     );
   };
 
-  /**
-   * Handle view player stats (future feature)
-   */
   const handleViewStats = () => {
     setModalVisible(false);
     Alert.alert('Coming Soon', 'Player statistics view will be available in a future update.');
     setSelectedPlayer(null);
   };
 
-  /**
-   * Close modal
-   */
   const handleCloseModal = () => {
     setModalVisible(false);
     setSelectedPlayer(null);
   };
 
-  /**
-   * Format time to deadline
-   */
   const getDeadlineText = () => {
-    if (!currentRound) return 'No active round';
-    if (isLocked) return `Gameweek ${currentRound.round_number} - In Progress`;
+    if (!currentRound) return 'NO ACTIVE ROUND';
+    if (isLocked) return `GAMEWEEK ${currentRound.round_number} — LIVE`;
     if (timeToDeadline) {
       const { days, hours, minutes } = timeToDeadline;
-      if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-      if (hours > 0) return `${hours}h ${minutes}m`;
-      return `${minutes}m remaining`;
+      if (days > 0) return `DEADLINE: ${days}D ${hours}H`;
+      if (hours > 0) return `DEADLINE: ${hours}H ${minutes}M`;
+      return `DEADLINE: ${minutes}M`;
     }
-    return formatDeadline ? formatDeadline(currentRound.deadline) : 'Deadline passed';
+    return formatDeadline ? formatDeadline(currentRound.deadline) : 'DEADLINE PASSED';
   };
 
-  /**
-   * Get team status text
-   */
-  const getTeamStatus = () => {
-    const playersNeeded = 12 - selectedPlayers.length;
-    if (playersNeeded > 0) {
-      return `${playersNeeded} player${playersNeeded > 1 ? 's' : ''} needed`;
-    }
-    return 'Squad complete';
+  const getFreeTransfersText = () => {
+    if (isUnlimitedPhase) return 'Free transfers: Unlimited (Pre-GW1)';
+    const maxNote = freeTransfers === 2 ? '(Max)' : '';
+    return `Free transfers: ${freeTransfers}${maxNote}, additional transfers cost -4`;
   };
-
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* ── Header ── */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Image source={Icons.swap} style={styles.headerEmoji} />
-          <Text style={styles.title}>Transfers</Text>
-          
-          {/* Budget and Deadline Info */}
+          <Text style={styles.title}>TRANSFERS</Text>
+
           <View style={styles.statsRow}>
             <View style={styles.statBadge}>
-              <Text style={styles.statLabel}>Budget</Text>
+              <Text style={styles.statLabel}>BUDGET</Text>
               <Text style={styles.statValue}>${remainingBudget.toFixed(1)}M</Text>
             </View>
             <View style={styles.statBadge}>
-              <Text style={styles.statLabel}>Spent</Text>
+              <Text style={styles.statLabel}>SPENT</Text>
               <Text style={styles.statValue}>${totalSpent.toFixed(1)}M</Text>
             </View>
-            <View style={[
-              styles.statBadge,
-              selectedPlayers.length === 12 && styles.statBadgeSuccess
-            ]}>
-              <Text style={styles.statLabel}>Squad</Text>
-              <Text style={styles.statValue}>{selectedPlayers.length}/12</Text>
+            <View
+              style={[
+                styles.statBadge,
+                selectedPlayers.length === MAX_PLAYERS && styles.statBadgeSuccess,
+              ]}
+            >
+              <Text style={styles.statLabel}>SQUAD</Text>
+              <Text style={styles.statValue}>{selectedPlayers.length}/{MAX_PLAYERS}</Text>
             </View>
           </View>
 
-          {/* Transfer Info */}
-          {isUnlimitedPhase ? (
-            <View style={styles.transferInfoBadge}>
-              <Image source={Icons.water} style={styles.transferInfoIcon} />
-              <Text style={styles.transferInfoText}>Free Transfers: Unlimited (Pre-GW1)</Text>
-            </View>
-          ) : (
-            <View style={styles.transferInfoRow}>
-              <View style={[
-                styles.transferInfoBadge,
-                freeTransfers === 0 && styles.transferInfoBadgeWarning,
-              ]}>
-                <Image source={Icons.water} style={styles.transferInfoIcon} />
-                <Text style={styles.transferInfoText}>
-                  Free Transfers: {freeTransfers}{freeTransfers === 2 ? ' (Max)' : ''}
-                </Text>
-              </View>
-              {transfersMadeThisRound > 0 && (
-                <View style={styles.transfersMadeBadge}>
-                  <Text style={styles.transfersMadeText}>
-                    {transfersMadeThisRound} made this GW
-                  </Text>
-                </View>
-              )}
+          <View
+            style={[
+              styles.infoBadge,
+              styles.transferInfoBadge,
+              !isUnlimitedPhase && freeTransfers === 0 && styles.transferInfoWarning,
+            ]}
+          >
+            <Image source={Icons.swap} style={styles.transferInfoIcon} />
+            <Text style={styles.transferInfoText}>{getFreeTransfersText()}</Text>
+          </View>
+
+          {!isUnlimitedPhase && transfersMadeThisRound > 0 && (
+            <View style={[styles.infoBadge, styles.transfersMadeBadge]}>
+              <Text style={styles.transfersMadeText}>
+                {transfersMadeThisRound} MADE THIS GW
+              </Text>
             </View>
           )}
 
-          {/* Point deductions warning */}
           {pendingDeductions > 0 && (
-            <View style={styles.deductionBadge}>
+            <View style={[styles.infoBadge, styles.deductionBadge]}>
               <Image source={Icons.warning} style={styles.deductionIcon} />
-              <Text style={styles.deductionText}>-{pendingDeductions} pts hit this GW</Text>
+              <Text style={styles.deductionText}>-{pendingDeductions} PTS HIT THIS GW</Text>
             </View>
           )}
 
-          {/* Deadline */}
           {currentRound && (
-            <View style={[
-              styles.deadlineBadge,
-              isLocked && styles.deadlineBadgeLocked
-            ]}>
+            <View style={[styles.infoBadge, styles.deadlineBadge]}>
               <Image
                 source={isLocked ? Icons.locked : Icons.clock}
                 style={styles.deadlineIcon}
               />
-              <Text style={styles.deadlineText}>
-                {getDeadlineText()}
-              </Text>
+              <Text style={styles.deadlineText}>{getDeadlineText()}</Text>
             </View>
           )}
         </View>
       </View>
 
-      {/* Locked Banner */}
+      {/* ── Locked banner ── */}
       {isLocked && currentRound && (
         <View style={styles.lockedBanner}>
           <Image source={Icons.locked} style={styles.lockedIcon} />
           <View style={styles.lockedContent}>
-            <Text style={styles.lockedTitle}>Transfers Locked</Text>
+            <Text style={styles.lockedTitle}>Transfers locked</Text>
             <Text style={styles.lockedText}>
-              Gameweek {currentRound.round_number} is in progress. Transfers will reopen after matches complete.
+              Gameweek {currentRound.round_number} is in progress. Transfers reopen after matches complete.
             </Text>
           </View>
         </View>
       )}
 
-      {/* Team Status */}
-      {!isLocked && selectedPlayers.length < 12 && (
+      {/* ── Incomplete squad nudge ── */}
+      {!isLocked && selectedPlayers.length > 0 && selectedPlayers.length < MAX_PLAYERS && (
         <View style={styles.statusBanner}>
-          <Image source={Icons.graph} style={styles.statusIcon} />
+          <Image source={Icons.warning} style={styles.statusIcon} />
           <View style={styles.statusContent}>
-            <Text style={styles.statusTitle}>{getTeamStatus()}</Text>
+            <Text style={styles.statusTitle}>
+              ADD {MAX_PLAYERS - selectedPlayers.length} MORE TO COMPLETE YOUR SQUAD
+            </Text>
             <Text style={styles.statusText}>
-              {goalkeepersCount < 2 && `${2 - goalkeepersCount} GK needed • `}
-              {outfieldCount < 10 && `${10 - outfieldCount} Outfield needed`}
+              {goalkeepersCount < 2 && `Need ${2 - goalkeepersCount} more GK • `}
+              {outfieldCount < MAX_OUTFIELD && `Need ${MAX_OUTFIELD - outfieldCount} more Outfield`}
             </Text>
           </View>
         </View>
       )}
 
-      {/* Pitch View */}
+      {/* ── Pitch / Empty ── */}
       {selectedPlayers.length > 0 ? (
-        <>
-          <PitchView
-            players={selectedPlayers}
-            captainId={captainId}
-            mode="transfers"
-            onPlayerPress={handlePlayerPress}
-            onEmptySlotPress={handleEmptySlotPress}
-            isLocked={isLocked}
-          />
-
-        </>
+        <PitchView
+          players={selectedPlayers}
+          captainId={captainId}
+          mode="transfers"
+          onPlayerPress={handlePlayerPress}
+          onEmptySlotPress={handleEmptySlotPress}
+          isLocked={isLocked}
+        />
       ) : (
-        <ScrollView style={styles.emptyContainer} contentContainerStyle={styles.emptyContent}>
-          <Image source={Icons.player} style={styles.emptyEmoji} />
-          <Text style={styles.emptyTitle}>Start Building Your Team</Text>
-          <Text style={styles.emptyText}>
-            You have ${STARTING_BUDGET.toFixed(1)}M to build a squad of 12 players
-          </Text>
-          
-          <View style={styles.emptyRequirements}>
-            <View style={styles.emptyRequirementItem}>
-              <Image source={Icons.goalie} style={styles.emptyRequirementIcon} />
-              <Text style={styles.emptyRequirementText}>2 Goalkeepers</Text>
+        <ScrollView
+          style={styles.emptyContainer}
+          contentContainerStyle={styles.emptyContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <TouchableOpacity
+            style={styles.emptyCard}
+            onPress={() => !isLocked && navigation.navigate('Players')}
+            activeOpacity={0.85}
+            disabled={isLocked}
+          >
+            <Image source={Icons.roboplayer} style={styles.emptyEmoji} />
+            <Text style={styles.emptyTitle}>START BUILDING YOUR TEAM</Text>
+            <Text style={styles.emptyText}>
+              {`You have $${STARTING_BUDGET.toFixed(1)}M\nto build a squad of ${MAX_PLAYERS} players.`}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.requirementsGrid}>
+            <View style={styles.requirementRow}>
+              <View style={styles.requirementItem}>
+                <View style={styles.requirementNumBox}>
+                  <Text style={styles.requirementNum}>2</Text>
+                </View>
+                <Text style={styles.requirementLabel}>GOALKEEPERS</Text>
+              </View>
+              <View style={styles.requirementItem}>
+                <View style={styles.requirementNumBox}>
+                  <Text style={styles.requirementNum}>{MAX_OUTFIELD}</Text>
+                </View>
+                <Text style={styles.requirementLabel}>FIELD PLAYERS</Text>
+              </View>
             </View>
-            <View style={styles.emptyRequirementItem}>
-              <Image source={Icons.player} style={styles.emptyRequirementIcon} />
-              <Text style={styles.emptyRequirementText}>10 Field Players</Text>
-            </View>
-            <View style={styles.emptyRequirementItem}>
-              <Image source={Icons.trophy} style={styles.emptyRequirementIcon} />
-              <Text style={styles.emptyRequirementText}>7 Starters + 5 Subs</Text>
+            <View style={styles.requirementRow}>
+              <View style={styles.requirementItem}>
+                <View style={styles.requirementNumBox}>
+                  <Text style={styles.requirementNum}>7</Text>
+                </View>
+                <Text style={styles.requirementLabel}>STARTERS</Text>
+              </View>
+              <View style={styles.requirementItem}>
+                <View style={styles.requirementNumBox}>
+                  <Text style={styles.requirementNum}>{MAX_SUBSTITUTES}</Text>
+                </View>
+                <Text style={styles.requirementLabel}>SUBSTITUTES</Text>
+              </View>
             </View>
           </View>
-
-          <TouchableOpacity
-            style={styles.emptyButton}
-            onPress={() => navigation.navigate('Players')}
-            activeOpacity={0.8}
-          >
-            <Image source={Icons.player} style={styles.emptyButtonIcon} />
-            <Text style={styles.emptyButtonText}>Select Players</Text>
-          </TouchableOpacity>
         </ScrollView>
       )}
 
-      {/* Player Action Modal */}
+      {/* ── Player Action Modal ── */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -315,11 +282,12 @@ export default function TransfersScreen({ navigation }) {
           <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
             {selectedPlayer && (
               <>
-                {/* Player Info Header */}
                 <View style={styles.modalHeader}>
                   <View style={styles.modalPlayerInfo}>
                     <Image
-                      source={selectedPlayer.position === 'GK' ? Icons.goalie : Icons.player}
+                      source={
+                        selectedPlayer.position === 'GK' ? Icons.goalie : Icons.player1
+                      }
                       style={styles.modalPlayerEmoji}
                     />
                     <View style={styles.modalPlayerDetails}>
@@ -344,9 +312,7 @@ export default function TransfersScreen({ navigation }) {
                   )}
                 </View>
 
-                {/* Action Buttons */}
                 <View style={styles.modalActions}>
-                  {/* Replace Player */}
                   <TouchableOpacity
                     style={[styles.modalButton, styles.modalButtonPrimary]}
                     onPress={handleReplacePlayer}
@@ -354,14 +320,16 @@ export default function TransfersScreen({ navigation }) {
                   >
                     <Image source={Icons.swap} style={styles.modalButtonIcon} />
                     <View style={styles.modalButtonTextContainer}>
-                      <Text style={styles.modalButtonText}>Replace Player</Text>
+                      <Text style={styles.modalButtonText}>REPLACE PLAYER</Text>
                       <Text style={styles.modalButtonSubtext}>
-                        Find {selectedPlayer.position === 'GK' ? 'another goalkeeper' : 'another field player'}
+                        Find{' '}
+                        {selectedPlayer.position === 'GK'
+                          ? 'another goalkeeper'
+                          : 'another field player'}
                       </Text>
                     </View>
                   </TouchableOpacity>
 
-                  {/* View Stats (future feature) */}
                   <TouchableOpacity
                     style={[styles.modalButton, styles.modalButtonSecondary]}
                     onPress={handleViewStats}
@@ -369,15 +337,13 @@ export default function TransfersScreen({ navigation }) {
                   >
                     <Image source={Icons.graph} style={styles.modalButtonIcon} />
                     <View style={styles.modalButtonTextContainer}>
-                      <Text style={styles.modalButtonText}>View Stats</Text>
+                      <Text style={styles.modalButtonText}>VIEW STATS</Text>
                       <Text style={styles.modalButtonSubtext}>
                         Performance and history
                       </Text>
                     </View>
                   </TouchableOpacity>
 
-                  {/* Remove Player — only allowed during unlimited squad-building phase.
-                      Post-GW1 removals must go through Replace to enforce transfer costs. */}
                   {isUnlimitedPhase && (
                     <TouchableOpacity
                       style={[styles.modalButton, styles.modalButtonDanger]}
@@ -386,7 +352,7 @@ export default function TransfersScreen({ navigation }) {
                     >
                       <Image source={Icons.warning} style={styles.modalButtonIcon} />
                       <View style={styles.modalButtonTextContainer}>
-                        <Text style={styles.modalButtonTextDanger}>Remove from Team</Text>
+                        <Text style={styles.modalButtonTextDanger}>REMOVE FROM TEAM</Text>
                         <Text style={styles.modalButtonSubtextDanger}>
                           Free up ${selectedPlayer.price.toFixed(1)}M
                         </Text>
@@ -394,13 +360,12 @@ export default function TransfersScreen({ navigation }) {
                     </TouchableOpacity>
                   )}
 
-                  {/* Cancel Button */}
                   <TouchableOpacity
                     style={[styles.modalButton, styles.modalButtonCancel]}
                     onPress={handleCloseModal}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+                    <Text style={styles.modalButtonTextCancel}>CANCEL</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -415,483 +380,420 @@ export default function TransfersScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: 'transparent',
   },
+
   header: {
-    backgroundColor: colors.oceanDeep,
-    paddingTop: 60,
-    paddingBottom: spacing.lg,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    ...shadows.large,
+    paddingTop: 56,
+    paddingBottom: spacing.md,
   },
   headerContent: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
   },
-  headerEmoji: {
-    width: 48,
-    height: 48,
-    marginBottom: spacing.xs,
-    resizeMode: 'contain',
-  },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 64,
     color: colors.white,
-    marginBottom: spacing.md,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginBottom: spacing.xxl + 32,
   },
+
   statsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
+    width: '100%',
   },
   statBadge: {
-    backgroundColor: colors.oceanMedium + '40',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    flex: 1,
+    backgroundColor: colors.auth.glass,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md + 4,
     borderRadius: borderRadius.medium,
-    borderWidth: 2,
-    borderColor: colors.oceanBright + '60',
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
     alignItems: 'center',
-    minWidth: 85,
+    minHeight: 72,
+    justifyContent: 'center',
   },
   statBadgeSuccess: {
-    backgroundColor: colors.success + '30',
     borderColor: colors.success,
   },
   statLabel: {
-    fontSize: 10,
-    color: colors.oceanBright,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    marginBottom: 2,
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 16,
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
+    marginBottom: -2,
   },
   statValue: {
-    fontSize: 16,
-    color: colors.white,
-    fontWeight: 'bold',
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 28,
+    color: colors.auth.statValue,
   },
-  transferInfoRow: {
+
+  infoBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
-    flexWrap: 'wrap',
     justifyContent: 'center',
+    gap: 8,
+    width: '100%',
+    borderWidth: 0.5,
+    backgroundColor: colors.auth.inputBg,
+    borderRadius: borderRadius.medium,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.lg + 4,
+    marginBottom: spacing.sm,
   },
   transferInfoBadge: {
-    backgroundColor: colors.sand + '25',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.round,
-    borderWidth: 1,
-    borderColor: colors.sand + '80',
-    marginBottom: spacing.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    borderColor: colors.auth.neon,
   },
-  transferInfoIcon: {
-    width: 12,
-    height: 12,
-    resizeMode: 'contain',
-  },
-  transferInfoBadgeWarning: {
-    backgroundColor: colors.warning + '30',
+  transferInfoWarning: {
     borderColor: colors.warning,
   },
+  transferInfoIcon: {
+    width: 16,
+    height: 16,
+    resizeMode: 'contain',
+    tintColor: colors.auth.neon,
+  },
   transferInfoText: {
-    fontSize: 11,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 18,
     color: colors.white,
-    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   transfersMadeBadge: {
-    backgroundColor: colors.oceanMedium + '40',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.round,
-    borderWidth: 1,
-    borderColor: colors.oceanBright + '60',
-    marginBottom: spacing.xs,
+    borderColor: colors.auth.neonSoft,
   },
   transfersMadeText: {
-    fontSize: 10,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 13,
     color: colors.white,
-    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   deductionBadge: {
-    backgroundColor: colors.coral + '20',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.round,
-    borderWidth: 1,
     borderColor: colors.coral,
-    marginBottom: spacing.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
   },
   deductionIcon: {
-    width: 12,
-    height: 12,
+    width: 16,
+    height: 16,
     resizeMode: 'contain',
   },
   deductionText: {
-    fontSize: 11,
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 14,
     color: colors.coral,
-    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   deadlineBadge: {
-    backgroundColor: colors.warning + '30',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.round,
-    borderWidth: 1,
-    borderColor: colors.warning,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  deadlineBadgeLocked: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#FCA5A5',
+    borderColor: colors.sand,
+    marginTop: spacing.xs,
+    marginBottom: 0,
   },
   deadlineIcon: {
-    width: 14,
-    height: 14,
+    width: 16,
+    height: 16,
     resizeMode: 'contain',
+    tintColor: colors.sand,
   },
   deadlineText: {
-    fontSize: 12,
-    color: colors.white,
-    fontWeight: '600',
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 16,
+    color: colors.sand,
+    letterSpacing: 0.5,
   },
+
   lockedBanner: {
-    backgroundColor: colors.coral + '18',
+    backgroundColor: colors.coral + '22',
     marginHorizontal: spacing.md,
-    marginTop: spacing.md,
+    marginBottom: spacing.sm,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
-    borderWidth: 2,
+    borderWidth: 0.5,
     borderColor: colors.coral,
-    borderLeftWidth: 5,
-    borderLeftColor: colors.coral,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
   },
   lockedIcon: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
     resizeMode: 'contain',
   },
   lockedContent: {
     flex: 1,
   },
   lockedTitle: {
-    fontSize: 14,
-    color: '#991B1B',
-    fontWeight: 'bold',
-    marginBottom: 4,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 18,
+    color: colors.coral,
+    marginBottom: 2,
   },
   lockedText: {
-    fontSize: 12,
-    color: '#991B1B',
-    fontWeight: '600',
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 16,
+    color: colors.white,
   },
+
   statusBanner: {
-    backgroundColor: colors.sand + '15',
+    backgroundColor: colors.auth.inputBg,
     marginHorizontal: spacing.md,
-    marginTop: spacing.md,
+    marginBottom: spacing.sm,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
-    borderWidth: 2,
-    borderColor: colors.sand + '80',
-    borderLeftWidth: 5,
-    borderLeftColor: colors.sand,
+    borderWidth: 0.5,
+    borderColor: colors.sand,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
   statusIcon: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
     resizeMode: 'contain',
   },
   statusContent: {
     flex: 1,
   },
   statusTitle: {
+    fontFamily: fonts.barlowCondensedBold,
     fontSize: 14,
-    color: colors.textDark,
-    fontWeight: 'bold',
+    color: colors.sand,
     marginBottom: 2,
   },
   statusText: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 12,
-    color: colors.textMedium,
-    fontWeight: '600',
+    color: colors.white,
   },
+
   emptyContainer: {
     flex: 1,
   },
   emptyContent: {
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.xl,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
+  },
+  emptyCard: {
+    width: '100%',
+    backgroundColor: colors.auth.glass,
+    borderRadius: borderRadius.large,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    padding: spacing.xs + 8,
+    alignItems: 'center',
+    marginBottom: spacing.lg,
   },
   emptyEmoji: {
-    width: 80,
-    height: 80,
-    marginBottom: spacing.lg,
+    width: 100,
+    height: 100,
     resizeMode: 'contain',
+    opacity: 0.9,
   },
   emptyTitle: {
+    fontFamily: fonts.barlowCondensedExtraBold,
     fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.textDark,
+    color: '#7CB2FF',
+    letterSpacing: 1,
     marginBottom: spacing.sm,
     textAlign: 'center',
   },
   emptyText: {
-    fontSize: 16,
-    color: colors.textMuted,
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 18,
+    color: colors.white,
     textAlign: 'center',
-    marginBottom: spacing.xl,
     lineHeight: 24,
   },
-  emptyRequirements: {
-    backgroundColor: colors.pearl,
-    padding: spacing.lg,
-    borderRadius: borderRadius.large,
-    marginBottom: spacing.xl,
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.oceanBright + '20',
-  },
-  emptyRequirementItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+
+  requirementsGrid: {
+    width: '100%',
+    paddingHorizontal: spacing.sm,
     gap: spacing.md,
-    paddingVertical: spacing.sm,
   },
-  emptyRequirementIcon: {
-    width: 24,
-    height: 24,
-    resizeMode: 'contain',
+  requirementRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
   },
-  emptyRequirementText: {
-    fontSize: 16,
-    color: colors.textDark,
-    fontWeight: '600',
-  },
-  emptyButton: {
-    backgroundColor: colors.oceanMedium,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.medium,
+  requirementItem: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    ...shadows.medium,
   },
-  emptyButtonIcon: {
-    width: 20,
-    height: 20,
-    resizeMode: 'contain',
-  },
-  emptyButtonText: {
-    color: colors.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  actionsCard: {
-    backgroundColor: colors.pearl,
-    margin: spacing.md,
-    padding: spacing.lg,
-    borderRadius: borderRadius.large,
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.oceanBright + '20',
-    gap: spacing.md,
-  },
-  actionButton: {
-    backgroundColor: colors.oceanMedium,
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    flexDirection: 'row',
+  requirementNumBox: {
+    width: 58,
+    height: 46,
+    borderRadius: borderRadius.small,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    backgroundColor: colors.auth.glass,
     alignItems: 'center',
-    gap: spacing.md,
-    ...shadows.small,
+    justifyContent: 'center',
   },
-  actionButtonSecondary: {
-    backgroundColor: colors.oceanBright + '30',
-    borderWidth: 2,
-    borderColor: colors.oceanMedium,
-  },
-  actionButtonIcon: {
-    fontSize: 28,
-  },
-  actionButtonContent: {
-    flex: 1,
-  },
-  actionButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+  requirementNum: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 24,
     color: colors.white,
-    marginBottom: 2,
   },
-  actionButtonSubtext: {
-    fontSize: 12,
-    color: colors.white + 'DD',
-    fontWeight: '500',
+  requirementLabel: {
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 16,
+    color: colors.white,
+    letterSpacing: 0.5,
+    flexShrink: 1,
   },
-  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(2, 11, 24, 0.72)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.pearl,
+    backgroundColor: '#0A1A2E',
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    padding: spacing.xl,
-    paddingBottom: spacing.xl + 20,
-    ...shadows.large,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    borderBottomWidth: 0,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   modalHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: spacing.lg,
     paddingBottom: spacing.md,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.oceanBright + '20',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.auth.neonSoft,
   },
   modalPlayerInfo: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: spacing.md,
     flex: 1,
   },
   modalPlayerEmoji: {
     width: 56,
     height: 56,
-    resizeMode: 'contain',
+    borderRadius: 28,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
   },
   modalPlayerDetails: {
     flex: 1,
   },
   modalPlayerName: {
+    fontFamily: fonts.barlowCondensedExtraBold,
     fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.textDark,
-    marginBottom: 4,
+    color: colors.white,
+    marginBottom: 2,
   },
   modalPlayerSubtext: {
-    fontSize: 14,
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 13,
+    color: colors.auth.placeholder,
+    marginBottom: 4,
   },
   modalPlayerPriceContainer: {
     flexDirection: 'row',
     gap: spacing.md,
-    marginTop: spacing.xs,
   },
   modalPlayerPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.oceanMedium,
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 14,
+    color: colors.sand,
   },
   modalPlayerPoints: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.success,
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 14,
+    color: colors.auth.neon,
   },
   modalCaptainBadge: {
-    backgroundColor: '#FCD34D',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#F59E0B',
+    backgroundColor: colors.sand,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.small,
   },
   modalCaptainText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#92400E',
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 12,
+    color: colors.oceanDeep,
   },
   modalActions: {
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   modalButton: {
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    ...shadows.small,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
   },
   modalButtonPrimary: {
-    backgroundColor: colors.oceanMedium,
+    backgroundColor: colors.auth.glass,
+    borderColor: colors.auth.neon,
   },
   modalButtonSecondary: {
-    backgroundColor: colors.info + '30',
-    borderWidth: 2,
-    borderColor: colors.info,
+    backgroundColor: colors.auth.inputBg,
+    borderColor: colors.auth.neonSoft,
   },
   modalButtonDanger: {
-    backgroundColor: colors.coral + '18',
-    borderWidth: 2,
+    backgroundColor: 'rgba(229, 57, 53, 0.12)',
     borderColor: colors.coral,
   },
   modalButtonCancel: {
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 2,
-    borderColor: colors.textMuted + '40',
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+    justifyContent: 'center',
+    marginTop: spacing.xs,
   },
   modalButtonIcon: {
-    width: 28,
-    height: 28,
+    width: 22,
+    height: 22,
     resizeMode: 'contain',
+    tintColor: colors.auth.neon,
   },
   modalButtonTextContainer: {
     flex: 1,
   },
   modalButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 15,
     color: colors.white,
-    marginBottom: 2,
+    letterSpacing: 0.5,
   },
   modalButtonSubtext: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 12,
-    color: colors.white + 'DD',
-    fontWeight: '500',
+    color: colors.auth.placeholder,
+    marginTop: 2,
   },
   modalButtonTextDanger: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#991B1B',
-    marginBottom: 2,
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 15,
+    color: colors.coral,
+    letterSpacing: 0.5,
   },
   modalButtonSubtextDanger: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 12,
-    color: '#991B1B' + 'DD',
-    fontWeight: '500',
+    color: colors.coral,
+    opacity: 0.8,
+    marginTop: 2,
   },
   modalButtonTextCancel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.textMuted,
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 14,
+    color: colors.auth.placeholder,
     textAlign: 'center',
-    flex: 1,
+    letterSpacing: 1,
   },
 });

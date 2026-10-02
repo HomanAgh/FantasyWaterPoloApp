@@ -2,20 +2,100 @@ import React, { useState, useEffect } from 'react';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StatusBar, Image } from 'react-native';
+import { StatusBar, Image, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Sentry from '@sentry/react-native';
 import {
   useFonts,
   BarlowCondensed_400Regular,
+  BarlowCondensed_500Medium,
+  BarlowCondensed_600SemiBold,
+  BarlowCondensed_700Bold,
+  BarlowCondensed_800ExtraBold,
   BarlowCondensed_800ExtraBold_Italic,
 } from '@expo-google-fonts/barlow-condensed';
-import { colors } from './styles/theme';
+import { colors, fonts, spacing, borderRadius } from './styles/theme';
 import { Icons } from './assets/images/icons';
+import ScreenBackground from './components/ScreenBackground';
 import { RoundProvider } from './context/RoundContext';
 import { TeamProvider, useTeam } from './context/TeamContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import * as userProfileService from './services/userProfileService';
+import { withJwtClockSkewRetry } from './utils/supabaseAuthRetry';
+
+const TAB_INACTIVE_ICON = '#6B9BC4';
+const TAB_INACTIVE_LABEL = '#B8D0E6';
+
+function TabIcon({ source, focused }) {
+  return (
+    <Image
+      source={source}
+      style={[
+        tabStyles.iconShift,
+        {
+          width: 22,
+          height: 22,
+          resizeMode: 'contain',
+          tintColor: focused ? colors.sand : TAB_INACTIVE_ICON,
+        },
+      ]}
+    />
+  );
+}
+
+function TabLabel({ label, focused }) {
+  return (
+    <View style={tabStyles.labelWrap}>
+      <Text
+        style={[
+          tabStyles.label,
+          { color: focused ? colors.sand : TAB_INACTIVE_LABEL },
+        ]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+      <View
+        style={[
+          tabStyles.underline,
+          { backgroundColor: focused ? colors.sand : 'transparent' },
+        ]}
+      />
+    </View>
+  );
+}
+
+const tabStyles = StyleSheet.create({
+  // Nudge icons/labels upward — tweak iconShift / labelWrap.marginTop if needed
+  iconShift: {
+    marginTop: 0,
+  },
+  labelWrap: {
+    alignItems: 'center',
+    marginTop: -2,
+  },
+  label: {
+    fontFamily: fonts.barlowCondensedExtraBoldItalic, // cursive / italic like Figma
+    fontSize: 10,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  underline: {
+    marginTop: 2,
+    height: 3,
+    width: 36,
+    borderRadius: 2,
+  },
+});
+
+const AppTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: 'transparent',
+    card: 'transparent',
+  },
+};
 
 let sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 if (!sentryDsn) {
@@ -63,79 +143,80 @@ function MainTabs() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.sand,
-        tabBarInactiveTintColor: colors.textMuted,
+        tabBarInactiveTintColor: TAB_INACTIVE_LABEL,
         tabBarStyle: {
-          backgroundColor: colors.oceanDeep,
-          borderTopWidth: 2,
-          borderTopColor: colors.sand + '60',
-          height: 60 + insets.bottom,
-          paddingBottom: 8 + insets.bottom,
-          paddingTop: 8,
-          shadowColor: colors.oceanDeep,
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 8,
-          elevation: 10,
+          backgroundColor: '#011430',
+          borderTopWidth: 0,
+          height: 64 + insets.bottom,
+          // Less paddingTop = icons closer to top of bar
+          paddingBottom: Math.max(insets.bottom, 4),
+          paddingTop: 4,
+          elevation: 0,
+          shadowOpacity: 0,
         },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
+        sceneStyle: {
+          backgroundColor: 'transparent',
         },
-      }}>
+        tabBarItemStyle: {
+          paddingTop: 0,
+          justifyContent: 'flex-start',
+        },
+      }}
+    >
       <Tab.Screen
         name="Home"
         component={HomeScreen}
         options={{
-          title: 'Home',
-          tabBarIcon: ({ focused }) => <Image source={Icons.house} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
+          tabBarIcon: ({ focused }) => <TabIcon source={Icons.house} focused={focused} />,
+          tabBarLabel: ({ focused }) => <TabLabel label="Home" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="MyTeam"
         component={MyTeamScreen}
         options={{
-          title: 'My Team',
-          tabBarIcon: ({ focused }) => <Image source={Icons.swimmer} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
+          tabBarIcon: ({ focused }) => <TabIcon source={Icons.swimmer} focused={focused} />,
+          tabBarLabel: ({ focused }) => <TabLabel label="My Team" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Players"
         component={PlayersScreen}
         options={{
-          title: 'Players',
-          tabBarIcon: ({ focused }) => <Image source={Icons.player} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
+          tabBarIcon: ({ focused }) => <TabIcon source={Icons.player} focused={focused} />,
+          tabBarLabel: ({ focused }) => <TabLabel label="Players" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Transfers"
         component={TransfersScreen}
         options={{
-          title: 'Transfers',
-          tabBarIcon: ({ focused }) => <Image source={Icons.swap} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
+          tabBarIcon: ({ focused }) => <TabIcon source={Icons.swap} focused={focused} />,
+          tabBarLabel: ({ focused }) => <TabLabel label="Transfers" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Fixtures"
         component={FixturesScreen}
         options={{
-          title: 'Fixtures',
-          tabBarIcon: ({ focused }) => <Image source={Icons.calendar} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
+          tabBarIcon: ({ focused }) => <TabIcon source={Icons.calendar} focused={focused} />,
+          tabBarLabel: ({ focused }) => <TabLabel label="Fixtures" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Leagues"
         component={LeaguesScreen}
         options={{
-          title: 'Leagues',
-          tabBarIcon: ({ focused }) => <Image source={Icons.trophy} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
+          tabBarIcon: ({ focused }) => <TabIcon source={Icons.trophy} focused={focused} />,
+          tabBarLabel: ({ focused }) => <TabLabel label="Leagues" focused={focused} />,
         }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ focused }) => <Image source={Icons.badge} style={{ width: 24, height: 24, resizeMode: 'contain', tintColor: focused ? colors.sand : colors.textMuted }} />,
+          tabBarIcon: ({ focused }) => <TabIcon source={Icons.account} focused={focused} />,
+          tabBarLabel: ({ focused }) => <TabLabel label="Profile" focused={focused} />,
         }}
       />
     </Tab.Navigator>
@@ -146,28 +227,46 @@ function AppContent() {
   const { userId, isLoadingAuth } = useAuth();
   const { loadTeamName } = useTeam();
 
-  // null = not checked yet, true = needs onboarding, false = has profile
+  // null = not checked yet / checking, true = needs onboarding, false = has profile
   const [needsOnboarding, setNeedsOnboarding] = useState(null);
+  // Set when profile check fails (JWT/network) — never treat this as a new user
+  const [profileCheckError, setProfileCheckError] = useState(null);
 
   useEffect(() => {
     if (!userId) {
-      // User signed out or not logged in — reset onboarding state
       setNeedsOnboarding(null);
+      setProfileCheckError(null);
       return;
     }
     checkProfile(userId);
   }, [userId]);
 
   const checkProfile = async (id) => {
+    setProfileCheckError(null);
+    setNeedsOnboarding(null);
+
     try {
-      const profileExists = await userProfileService.checkIfProfileExists(id);
+      const { data: profileExists, error } = await withJwtClockSkewRetry(() =>
+        userProfileService.checkIfProfileExists(id)
+      );
+
+      if (error) {
+        console.error('[AppContent] Error checking profile:', error);
+        setProfileCheckError(
+          "Couldn't verify your account. Check your connection and try again."
+        );
+        return;
+      }
+
       if (profileExists) {
         await loadTeamName(id);
       }
       setNeedsOnboarding(!profileExists);
     } catch (error) {
       console.error('[AppContent] Error checking profile:', error);
-      setNeedsOnboarding(true);
+      setProfileCheckError(
+        "Couldn't verify your account. Check your connection and try again."
+      );
     }
   };
 
@@ -188,6 +287,23 @@ function AppContent() {
     return <AuthScreen />;
   }
 
+  // Profile check failed — retry, do NOT send existing users to onboarding
+  if (profileCheckError) {
+    return (
+      <View style={profileSyncStyles.container}>
+        <Text style={profileSyncStyles.title}>Couldn't sync account</Text>
+        <Text style={profileSyncStyles.message}>{profileCheckError}</Text>
+        <TouchableOpacity
+          style={profileSyncStyles.retryButton}
+          onPress={() => checkProfile(userId)}
+          activeOpacity={0.8}
+        >
+          <Text style={profileSyncStyles.retryText}>TRY AGAIN</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   // Logged in but haven't checked profile yet
   if (needsOnboarding === null) {
     return <LoadingScreen />;
@@ -205,7 +321,11 @@ function AppContent() {
 
   // Logged in, profile exists — main app
   return (
-    <Stack.Navigator>
+    <Stack.Navigator
+      screenOptions={{
+        contentStyle: { backgroundColor: 'transparent' },
+      }}
+    >
       <Stack.Screen
         name="Main"
         component={MainTabs}
@@ -230,16 +350,59 @@ function AppContent() {
   );
 }
 
+const profileSyncStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    backgroundColor: 'transparent',
+  },
+  title: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 20,
+    color: colors.sand,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  message: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 15,
+    color: colors.white,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  retryButton: {
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.medium,
+    borderWidth: 1.5,
+    borderColor: colors.auth.neon,
+  },
+  retryText: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 14,
+    color: colors.auth.neon,
+    letterSpacing: 1,
+  },
+});
+
 export default Sentry.wrap(function App() {
   const [fontsLoaded] = useFonts({
     BarlowCondensed_400Regular,
+    BarlowCondensed_500Medium,
+    BarlowCondensed_600SemiBold,
+    BarlowCondensed_700Bold,
+    BarlowCondensed_800ExtraBold,
     BarlowCondensed_800ExtraBold_Italic,
   });
 
   if (!fontsLoaded) {
     return (
       <SafeAreaProvider>
-        <LoadingScreen />
+        <ScreenBackground>
+          <LoadingScreen />
+        </ScreenBackground>
       </SafeAreaProvider>
     );
   }
@@ -249,9 +412,11 @@ export default Sentry.wrap(function App() {
       <AuthProvider>
         <RoundProvider>
           <TeamProvider>
-            <NavigationContainer theme={DefaultTheme}>
-              <StatusBar barStyle="dark-content" />
-              <AppContent />
+            <NavigationContainer theme={AppTheme}>
+              <StatusBar barStyle="light-content" />
+              <ScreenBackground>
+                <AppContent />
+              </ScreenBackground>
             </NavigationContainer>
           </TeamProvider>
         </RoundProvider>

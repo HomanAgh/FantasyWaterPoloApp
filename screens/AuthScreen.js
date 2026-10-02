@@ -11,16 +11,15 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
-  ImageBackground,
+  Linking,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
 import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { useAuth } from '../context/AuthContext';
+import { LEGAL_URLS } from '../utils/legalUrls';
 
-// Drop Figma exports into assets/images/, then set these requires:
-//   auth-bg.png    — full-bleed water/player background
+// Drop Figma title export into assets/images/, then set:
 //   auth-title.png — logo + "FANTASY WATER POLO" + yellow ribbon (transparent PNG)
-const AUTH_BG = null; // require('../assets/images/auth-bg.png')
 const AUTH_TITLE = null; // require('../assets/images/auth-title.png')
 
 const AuthScreen = ({ onNewUser }) => {
@@ -157,6 +156,14 @@ const AuthScreen = ({ onNewUser }) => {
     }
   };
 
+  const openLegalUrl = async (url) => {
+    try {
+      await Linking.openURL(url);
+    } catch (err) {
+      Alert.alert('Unable to Open', 'Could not open the link. Please try again.');
+    }
+  };
+
   const primaryAction =
     mode === 'login' ? handleLogin : mode === 'signup' ? handleSignUp : handleForgotPassword;
 
@@ -176,7 +183,7 @@ const AuthScreen = ({ onNewUser }) => {
         <Text style={styles.welcomeChip}>WELCOME TO</Text>
         <Text style={styles.appTitle}>FANTASY{'\n'}WATER POLO</Text>
         <View style={styles.ribbon}>
-          <Text style={styles.ribbonText}>DIVE INTO ACTION</Text>
+          <Text style={styles.ribbonText}>DIVE INTO THE ACTION</Text>
         </View>
       </View>
     );
@@ -321,6 +328,26 @@ const AuthScreen = ({ onNewUser }) => {
           )}
         </TouchableOpacity>
 
+        {mode === 'signup' && (
+          <Text style={styles.legalFooter}>
+            By creating an account you agree to our{' '}
+            <Text
+              style={styles.legalFooterLink}
+              onPress={() => openLegalUrl(LEGAL_URLS.terms)}
+            >
+              Terms & Conditions
+            </Text>
+            {' '}and{' '}
+            <Text
+              style={styles.legalFooterLink}
+              onPress={() => openLegalUrl(LEGAL_URLS.privacy)}
+            >
+              Privacy Policy
+            </Text>
+            .
+          </Text>
+        )}
+
         {mode === 'forgot' && (
           <TouchableOpacity
             onPress={() => switchMode('login')}
@@ -334,15 +361,7 @@ const AuthScreen = ({ onNewUser }) => {
     </KeyboardAvoidingView>
   );
 
-  if (AUTH_BG) {
-    return (
-      <ImageBackground source={AUTH_BG} style={styles.container} resizeMode="cover">
-        <View style={styles.scrim}>{content}</View>
-      </ImageBackground>
-    );
-  }
-
-  return <View style={[styles.container, styles.fallbackBg]}>{content}</View>;
+  return <View style={styles.container}>{content}</View>;
 };
 
 const styles = StyleSheet.create({
@@ -351,13 +370,6 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-  },
-  fallbackBg: {
-    backgroundColor: colors.auth.background,
-  },
-  scrim: {
-    flex: 1,
-    backgroundColor: 'rgba(2, 11, 24, 0.35)',
   },
   scroll: {
     flexGrow: 1,
@@ -391,9 +403,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   appTitle: {
+    fontFamily: fonts.barlowCondensedExtraBold,
     fontSize: 34,
-    fontWeight: '900',
-    fontStyle: 'italic',
     color: colors.white,
     textAlign: 'center',
     lineHeight: 38,
@@ -537,6 +548,19 @@ const styles = StyleSheet.create({
   switchLinkText: {
     color: colors.auth.neon,
     fontSize: 14,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  legalFooter: {
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.sm,
+    textAlign: 'center',
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.auth.placeholder,
+  },
+  legalFooterLink: {
+    color: colors.auth.neon,
     fontWeight: '600',
     textDecorationLine: 'underline',
   },

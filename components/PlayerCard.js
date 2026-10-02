@@ -1,159 +1,164 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Icons } from '../assets/images/icons';
-import { colors, shadows, spacing } from '../styles/theme';
+import { colors, fonts } from '../styles/theme';
 
 /**
- * PlayerCard Component
- * 
- * A reusable card component to display a player on the pitch.
- * Supports two modes: 'pickTeam' (for My Team screen) and 'transfers' (for Transfers screen).
- * 
- * @param {Object} props
- * @param {Object} props.player - Player object { id, name, position, team, price, points }
- * @param {boolean} props.isCaptain - Whether this player is the captain
- * @param {boolean} props.isStarter - Whether this player is in the starting lineup
- * @param {string} props.mode - Display mode: 'pickTeam' or 'transfers'
- * @param {function} props.onPress - Callback when card is pressed
- * @param {boolean} props.disabled - Whether the card is disabled (for locked rounds)
+ * PlayerCard — circular avatar + name + points/price for the pitch.
  */
-const PlayerCard = ({ 
-    player, 
-    isCaptain = false, 
-    isStarter = true, 
-    mode = 'pickTeam', 
-    onPress, 
-    disabled = false 
-  }) => {
-    return (
-      <TouchableOpacity
-        style={styles.container}
-        onPress={onPress}
-        disabled={disabled}
-        activeOpacity={0.7}
-      >
-        {/* Captain Badge */}
+const PlayerCard = ({
+  player,
+  isCaptain = false,
+  isStarter = true,
+  mode = 'pickTeam',
+  benchBadge = null,
+  onPress,
+  disabled = false,
+}) => {
+  const avatar = player.position === 'GK' ? Icons.goalie : Icons.player1;
+  const rawPoints = player.points ?? 0;
+  const displayPoints = isCaptain ? rawPoints * 2 : rawPoints;
+
+  return (
+    <TouchableOpacity
+      style={styles.container}
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.7}
+    >
+      <View style={styles.avatarWrap}>
         {isCaptain && (
           <View style={styles.captainBadge}>
             <Text style={styles.captainBadgeText}>C</Text>
           </View>
         )}
-        
-        {/* Jersey/Avatar Circle */}
-        <View style={[
-          styles.jerseyCircle, 
-          isStarter ? styles.jerseyCircleStarter : styles.jerseyCircleSub,
-          isCaptain && styles.captainCircle,
-          disabled && styles.disabledCircle
-        ]}>
-          <Image
-            source={player.position === 'GK' ? Icons.goalie : Icons.player}
-            style={styles.jerseyEmoji}
-          />
-        </View>
-        
-        {/* Player Name */}
-        <Text 
-          style={[
-            styles.playerName, 
-            isStarter ? styles.starterText : styles.substituteText
-          ]} 
-          numberOfLines={2}
-        >
-          {player.name}
-        </Text>
-        
-        {/* Display price in transfers mode, points in pick team mode */}
-        {mode === 'transfers' ? (
-          <Text style={[styles.valueText, isStarter ? styles.starterText : styles.substituteText]}>
-            ${player.price.toFixed(1)}M
-          </Text>
-        ) : (
-          <Text style={[styles.valueText, isStarter ? styles.starterText : styles.substituteText]}>
-            {player.points} pts
-          </Text>
+        {benchBadge != null && !isCaptain && (
+          <View style={styles.benchBadge}>
+            <Text style={styles.benchBadgeText}>{benchBadge}</Text>
+          </View>
         )}
-      </TouchableOpacity>
-    );
-  };
-  
-  const styles = StyleSheet.create({
-    container: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: 65,
-      position: 'relative',
-    },
-    captainBadge: {
-      position: 'absolute',
-      top: -4,
-      right: 8,
-      backgroundColor: colors.sand,
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderWidth: 2,
-      borderColor: colors.oceanDeep,
-      zIndex: 10,
-      ...shadows.medium,
-    },
-    captainBadgeText: {
-      color: colors.oceanDeep,
-      fontSize: 11,
-      fontWeight: 'bold',
-    },
-    jerseyCircle: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 4,
-      borderWidth: 2,
-      ...shadows.small,
-    },
-    jerseyCircleStarter: {
-      backgroundColor: colors.pearl,
-      borderColor: colors.oceanMedium,
-    },
-    jerseyCircleSub: {
-      backgroundColor: colors.backgroundLight,
-      borderColor: colors.textMuted,
-    },
-    captainCircle: {
-      borderColor: colors.sand,
-      borderWidth: 3,
-      ...shadows.medium,
-    },
-    disabledCircle: {
-      opacity: 0.5,
-    },
-    jerseyEmoji: {
-      width: 24,
-      height: 24,
-      resizeMode: 'contain',
-    },
-    playerName: {
-      fontSize: 10,
-      fontWeight: '600',
-      textAlign: 'center',
-      marginBottom: 2,
-      lineHeight: 12,
-      width: '100%',
-    },
-    starterText: {
-      color: colors.pearl,
-    },
-    substituteText: {
-      color: colors.pearl,
-    },
-    valueText: {
-      fontSize: 9,
-      fontWeight: 'bold',
-      textAlign: 'center',
-    },
-  });
-  
-  export default React.memo(PlayerCard);
+
+        <View
+          style={[
+            styles.jerseyCircle,
+            isStarter ? styles.jerseyCircleStarter : styles.jerseyCircleSub,
+            isCaptain && styles.captainCircle,
+            disabled && styles.disabledCircle,
+          ]}
+        >
+          <Image source={avatar} style={styles.jerseyEmoji} />
+        </View>
+      </View>
+
+      <Text style={styles.playerName} numberOfLines={2}>
+        {(player.name || '').toUpperCase()}
+      </Text>
+
+      {mode === 'transfers' ? (
+        <Text style={styles.valueText}>${player.price.toFixed(1)}M</Text>
+      ) : (
+        <Text style={styles.valueText}>{displayPoints} PTS</Text>
+      )}
+    </TouchableOpacity>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 72,
+    position: 'relative',
+  },
+  avatarWrap: {
+    position: 'relative',
+    marginBottom: 4,
+  },
+  captainBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: colors.sand,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+    borderWidth: 1.5,
+    borderColor: colors.oceanDeep,
+  },
+  captainBadgeText: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    color: colors.oceanDeep,
+    fontSize: 11,
+  },
+  benchBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: colors.auth.neon,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+    borderWidth: 1.5,
+    borderColor: colors.oceanDeep,
+  },
+  benchBadgeText: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    color: colors.white,
+    fontSize: 9,
+  },
+  jerseyCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
+  },
+  jerseyCircleStarter: {
+    borderColor: colors.auth.neon,
+  },
+  jerseyCircleSub: {
+    borderColor: colors.auth.neon,
+  },
+  captainCircle: {
+    borderColor: colors.sand,
+    borderWidth: 2.5,
+  },
+  disabledCircle: {
+    opacity: 0.55,
+  },
+  jerseyEmoji: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    resizeMode: 'cover',
+  },
+  playerName: {
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 9,
+    color: colors.white,
+    textAlign: 'center',
+    marginBottom: 2,
+    lineHeight: 11,
+    width: '100%',
+    letterSpacing: 0.2,
+  },
+  valueText: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 11,
+    color: colors.white,
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+});
+
+export default React.memo(PlayerCard);

@@ -7,20 +7,27 @@ import * as playerRoundPointsService from '../services/playerRoundPointsService'
 import * as userProfileService from '../services/userProfileService';
 import * as transferService from '../services/transferService';
 import * as userGwPicksService from '../services/userGwPicksService';
+import {
+  calculatePositionOrder as calcPositionOrder,
+  fetchAppearanceMap,
+  picksFromSelectedPlayers,
+  resolveSquadPointsWithAutoSub,
+} from '../services/autoSubstitutionService';
 import { getUserGlobalRank } from '../services/leagueService';
 import { useRound } from './RoundContext';
+import { withJwtClockSkewRetry } from '../utils/supabaseAuthRetry';
 
-// Constants
+// Constants — squad of 9: 7 starters (1 GK + 6 OF) + 2 bench (1 GK + 1 OF)
 const STARTING_BUDGET = 100.0; // $100M
-const MAX_PLAYERS = 12;
+const MAX_PLAYERS = 9;
 const MAX_GOALKEEPERS = 2;
-const MAX_OUTFIELD = 10;
+const MAX_OUTFIELD = 7;
 const MAX_STARTERS = 7;
 const MAX_GK_STARTERS = 1;
 const MAX_OUTFIELD_STARTERS = 6;
-const MAX_SUBSTITUTES = 5;
+const MAX_SUBSTITUTES = 2;
 const MAX_GK_SUBSTITUTES = 1;
-const MAX_OUTFIELD_SUBSTITUTES = 4;
+const MAX_OUTFIELD_SUBSTITUTES = 1;
 
 // Create context
 const TeamContext = createContext();
@@ -43,6 +50,7 @@ export const TeamProvider = ({ children }) => {
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [userId, setUserId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [teamLoadError, setTeamLoadError] = useState(null);
   const [captainId, setCaptainId] = useState(null);
   const [teamName, setTeamName] = useState('My Team');
 
@@ -78,6 +86,7 @@ export const TeamProvider = ({ children }) => {
       setSquadFinalized(false);
       setPendingDeductions(0);
       setLockedTotalPoints(0);
+      setTeamLoadError(null);
       setIsLoading(false);
     }
   }, [authUserId]);
@@ -88,13 +97,14 @@ export const TeamProvider = ({ children }) => {
   const initializeTeam = async (id) => {
     try {
       setIsLoading(true);
+      setTeamLoadError(null);
       setUserId(id);
       await loadUserTeam(id);
       await loadTransferState(id);
       await loadLockedTotalPoints(id);
     } catch (error) {
       console.error('Error initializing team:', error);
-      Alert.alert('Error', 'Failed to initialize team. Please restart the app.');
+      setTeamLoadError('Failed to sync your team. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -137,21 +147,37 @@ export const TeamProvider = ({ children }) => {
   };
 
   /**
-   * Load user's team from Supabase
+   * Load user's team from Supabase.
+   * On PGRST303 ("JWT issued at future"): wait with backoff and retry the same
+   * session — do not refresh (fresh tokens stay rejected mid clock-skew).
+   * Failed load sets teamLoadError and leaves selectedPlayers unchanged so the
+   * UI does not treat an empty sync as an incomplete squad.
    */
   const loadUserTeam = async (userIdParam = userId) => {
     if (!userIdParam) return;
 
     try {
       setIsLoading(true);
-      const { data, error } = await userTeamService.getUserTeam(userIdParam);
+      setTeamLoadError(null);
+      const { data, error } = await withJwtClockSkewRetry(
+        () => userTeamService.getUserTeam(userIdParam),
+        {
+          onRetry: () => {
+            // Keep loading UI up while we wait out Auth/API clock skew
+            setIsLoading(true);
+          },
+        }
+      );
 
       if (error) {
         console.error('Error loading user team:', error);
-        Alert.alert('Error', 'Failed to load your team.');
+        setTeamLoadError(
+          "Couldn't sync your team right now. Check your connection and try again."
+        );
         return;
       }
 
+      setTeamLoadError(null);
       setSelectedPlayers(data || []);
       
       // Extract and set captain
@@ -178,6 +204,7 @@ export const TeamProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Error in loadUserTeam:', error);
+      setTeamLoadError("Couldn't sync your team right now. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -408,29 +435,10 @@ export const TeamProvider = ({ children }) => {
    * @param {Object} player - Player object
    * @param {boolean} isStarter - Whether player is a starter
    * @param {Array} currentTeam - Current team array
-   * @returns {number} Position order (1-12)
+   * @returns {number} Position order (1-7 starters, 8-9 bench)
    */
-  const calculatePositionOrder = (player, isStarter, currentTeam) => {
-    if (isStarter) {
-      const starters = currentTeam.filter(p => p.isStarter && p.id !== player.id);
-      const gkStarters = starters.filter(p => p.position === 'GK').length;
-      
-      if (player.position === 'GK') {
-        return 1;
-      } else {
-        return gkStarters + starters.filter(p => p.position === 'Outfield').length + 1;
-      }
-    } else {
-      const bench = currentTeam.filter(p => !p.isStarter && p.id !== player.id);
-      const gkBench = bench.filter(p => p.position === 'GK').length;
-      
-      if (player.position === 'GK') {
-        return 8;
-      } else {
-        return 8 + gkBench + bench.filter(p => p.position === 'Outfield').length + 1;
-      }
-    }
-  };
+  const calculatePositionOrder = (player, isStarter, currentTeam) =>
+    calcPositionOrder(player, isStarter, currentTeam);
 
   // ===== Validation Functions =====
 
@@ -587,32 +595,8 @@ export const TeamProvider = ({ children }) => {
       }
     }
 
-    // Calculate position_order
-    let positionOrder = null;
-    
-    if (isStarter) {
-      // Starters: order 1-7
-      const currentStarters = selectedPlayers.filter(p => p.isStarter);
-      const gkStarters = currentStarters.filter(p => p.position === 'GK').length;
-      
-      if (player.position === 'GK') {
-        positionOrder = 1; // GK is always position 1
-      } else {
-        // Outfield starters start at position 2
-        positionOrder = gkStarters + currentStarters.filter(p => p.position === 'Outfield').length + 1;
-      }
-    } else {
-      // Bench: order 8-12
-      const currentBench = selectedPlayers.filter(p => !p.isStarter);
-      const gkBench = currentBench.filter(p => p.position === 'GK').length;
-      
-      if (player.position === 'GK') {
-        positionOrder = 8; // Bench GK is always position 8
-      } else {
-        // Outfield bench starts at position 9
-        positionOrder = 8 + gkBench + currentBench.filter(p => p.position === 'Outfield').length + 1;
-      }
-    }
+    // Calculate position_order (starters 1-7, bench 8-9)
+    const positionOrder = calculatePositionOrder(player, isStarter, selectedPlayers);
 
     try {
       // Optimistic update: Update local state immediately
@@ -1152,7 +1136,7 @@ export const TeamProvider = ({ children }) => {
 
     // Check outfield players
     if (outfieldCount < MAX_OUTFIELD) {
-      messages.push(`You need ${MAX_OUTFIELD - outfieldCount} more field players (need 10 total).`);
+      messages.push(`You need ${MAX_OUTFIELD - outfieldCount} more field players (need ${MAX_OUTFIELD} total).`);
     }
 
     // Check starters
@@ -1266,21 +1250,21 @@ export const TeamProvider = ({ children }) => {
         );
       }
 
-      // Round still open — live preview from current team
-      const starters = selectedPlayers.filter(p => p.isStarter);
-      const starterIds = starters.map(p => p.id);
+      // Round still open — live preview from current team (with auto-subs)
+      if (selectedPlayers.length === 0) return 0;
 
-      if (starterIds.length === 0) return 0;
+      const picks = picksFromSelectedPlayers(selectedPlayers, captainId);
+      const playerIds = picks.map(p => p.player_id);
+      const [appearanceMap, { data: pointsMap }] = await Promise.all([
+        fetchAppearanceMap(playerIds, roundId),
+        playerRoundPointsService.getMultiplePlayersPointsForRound(playerIds, roundId),
+      ]);
 
-      const { data: pointsMap } = await playerRoundPointsService
-        .getMultiplePlayersPointsForRound(starterIds, roundId);
-
-      let total = 0;
-      starters.forEach(player => {
-        const points = pointsMap[player.id] || 0;
-        const multiplier = player.id === captainId ? 2 : 1;
-        total += points * multiplier;
-      });
+      const { total } = resolveSquadPointsWithAutoSub(
+        picks,
+        appearanceMap,
+        pointsMap || {}
+      );
 
       return total - pendingDeductions;
     } catch (error) {
@@ -1295,6 +1279,7 @@ export const TeamProvider = ({ children }) => {
     selectedPlayers,
     userId,
     isLoading,
+    teamLoadError,
     captainId,
     teamName,
 

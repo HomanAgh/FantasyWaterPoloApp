@@ -53,6 +53,9 @@ export const colors = {
     placeholder: '#7A8C9E',
     buttonTop: '#1E9FE8',
     buttonBottom: '#0B6BB5',
+    // BUDGET / SPENT / SQUAD / POINTS badge text — tweak these to restyle all screens
+    statLabel: '#7CB2FF',
+    statValue: '#FFFFFF',
   },
 };
 
@@ -126,6 +129,10 @@ export const borderRadius = {
 // Custom fonts — load in App.js before first render (see @expo-google-fonts/barlow-condensed)
 export const fonts = {
   barlowCondensedRegular: 'BarlowCondensed_400Regular',
+  barlowCondensedMedium: 'BarlowCondensed_500Medium',
+  barlowCondensedSemiBold: 'BarlowCondensed_600SemiBold',
+  barlowCondensedBold: 'BarlowCondensed_700Bold',
+  barlowCondensedExtraBold: 'BarlowCondensed_800ExtraBold',
   barlowCondensedExtraBoldItalic: 'BarlowCondensed_800ExtraBold_Italic',
 };
 

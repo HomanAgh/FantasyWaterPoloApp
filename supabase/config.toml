@@ -1,0 +1,6 @@
+# Supabase local / CLI config (minimal). Deploy functions with:
+#   supabase functions deploy delete-account
+# Run SQL migrations manually in the Dashboard SQL Editor (project convention).
+
+[functions.delete-account]
+verify_jwt = true

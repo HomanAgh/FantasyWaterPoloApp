@@ -188,6 +188,7 @@ export const formatPlayerStats = (stats) => {
   if (stats.saves > 0) parts.push(`${stats.saves} saves`);
   if (stats.blocks > 0) parts.push(`${stats.blocks} blk`);
   if (stats.sprints > 0) parts.push(`${stats.sprints} spr`);
+  if (stats.fouls_drawn > 0) parts.push(`${stats.fouls_drawn} pfd`);
   if (stats.clean_sheets > 0) parts.push(`${stats.clean_sheets} CS`);
 
   return parts.join(', ') || 'No stats';

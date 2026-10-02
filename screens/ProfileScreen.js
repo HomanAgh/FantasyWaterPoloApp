@@ -8,18 +8,36 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Linking,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
-import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { useAuth } from '../context/AuthContext';
 import { useTeam } from '../context/TeamContext';
+import { LEGAL_URLS } from '../utils/legalUrls';
+
+const LEGAL_LINKS = [
+  { label: 'PRIVACY POLICY', url: LEGAL_URLS.privacy },
+  { label: 'TERMS & CONDITIONS', url: LEGAL_URLS.terms },
+  { label: 'HOW DELETE ACCOUNT WORKS', url: LEGAL_URLS.deleteAccount },
+];
 
 export default function ProfileScreen() {
-  const { session, signOut } = useAuth();
+  const { session, signOut, deleteAccount } = useAuth();
   const { teamName } = useTeam();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const email = session?.user?.email ?? '—';
+  const busy = isLoggingOut || isDeleting;
+
+  const openLegalUrl = async (url) => {
+    try {
+      await Linking.openURL(url);
+    } catch (err) {
+      Alert.alert('Unable to Open', 'Could not open the link. Please try again.');
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -37,7 +55,6 @@ export default function ProfileScreen() {
               if (error) {
                 Alert.alert('Log Out Failed', error.message);
               }
-              // On success, AuthContext clears session → App.js shows AuthScreen
             } catch (err) {
               Alert.alert('Error', 'Something went wrong. Please try again.');
             } finally {
@@ -49,39 +66,139 @@ export default function ProfileScreen() {
     );
   };
 
+  const performDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const { error } = await deleteAccount();
+      if (error) {
+        Alert.alert(
+          'Delete Failed',
+          error.message || 'Could not delete your account. Please try again.'
+        );
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account?',
+      'This permanently deletes your team, points, league memberships, and login. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Confirm Delete',
+              'Are you absolutely sure? Your Fantasy Water Polo account will be gone forever.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Account',
+                  style: 'destructive',
+                  onPress: performDelete,
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* ── Header ── */}
       <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Image source={Icons.badge} style={styles.headerEmoji} />
-          <Text style={styles.title}>Profile</Text>
-          <Text style={styles.subtitle}>Your account</Text>
+        <Text style={styles.title}>PROFILE</Text>
+      </View>
+
+      {/* ── Account info ── */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>ACCOUNT</Text>
+          <Image source={Icons.teambadge} style={[styles.cardHeaderIcon, styles.iconNeon]} />
+        </View>
+
+        <View style={styles.fieldRow}>
+          <Text style={styles.fieldLabel}>EMAIL</Text>
+          <Text style={styles.fieldValue} selectable numberOfLines={2}>
+            {email}
+          </Text>
+        </View>
+
+        <View style={styles.fieldDivider} />
+
+        <View style={styles.fieldRow}>
+          <Text style={styles.fieldLabel}>TEAM NAME</Text>
+          <Text style={styles.fieldValue}>{(teamName || 'My Team').toUpperCase()}</Text>
         </View>
       </View>
 
+      {/* ── Legal ── */}
       <View style={styles.card}>
-        <Text style={styles.fieldLabel}>Email</Text>
-        <Text style={styles.fieldValue} selectable>
-          {email}
-        </Text>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>LEGAL</Text>
+          <Image source={Icons.folder} style={[styles.cardHeaderIcon, styles.iconNeon]} />
+        </View>
 
-        <View style={styles.divider} />
-
-        <Text style={styles.fieldLabel}>Team name</Text>
-        <Text style={styles.fieldValue}>{teamName || 'My Team'}</Text>
+        {LEGAL_LINKS.map((item, index) => (
+          <React.Fragment key={item.url}>
+            {index > 0 && <View style={styles.fieldDivider} />}
+            <TouchableOpacity
+              style={styles.legalRow}
+              onPress={() => openLegalUrl(item.url)}
+              activeOpacity={0.7}
+              disabled={busy}
+            >
+              <Text style={styles.legalLabel}>{item.label}</Text>
+              <Text style={styles.chevron}>›</Text>
+            </TouchableOpacity>
+          </React.Fragment>
+        ))}
       </View>
 
-      <TouchableOpacity
-        style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]}
-        onPress={handleLogout}
-        disabled={isLoggingOut}
-      >
-        {isLoggingOut ? (
-          <ActivityIndicator color={colors.white} />
-        ) : (
-          <Text style={styles.logoutButtonText}>Log Out</Text>
-        )}
-      </TouchableOpacity>
+      {/* ── Actions ── */}
+      <View style={styles.actionsCard}>
+        <TouchableOpacity
+          style={[styles.outlineButton, busy && styles.buttonDisabled]}
+          onPress={handleLogout}
+          disabled={busy}
+          activeOpacity={0.8}
+        >
+          {isLoggingOut ? (
+            <ActivityIndicator color={colors.auth.neon} />
+          ) : (
+            <>
+              <Image source={Icons.letter} style={[styles.outlineButtonIcon, styles.iconNeon]} />
+              <Text style={styles.outlineButtonText}>LOG OUT</Text>
+              <Text style={styles.chevron}>›</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.deleteButton, busy && styles.buttonDisabled]}
+          onPress={handleDeleteAccount}
+          disabled={busy}
+          activeOpacity={0.8}
+        >
+          {isDeleting ? (
+            <ActivityIndicator color={colors.coral} />
+          ) : (
+            <Text style={styles.deleteButtonText}>DELETE ACCOUNT</Text>
+          )}
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
@@ -89,85 +206,154 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: 'transparent',
   },
-  content: {
-    paddingBottom: spacing.xxl,
-  },
-  header: {
-    backgroundColor: colors.oceanDeep,
-    paddingTop: spacing.xxl + spacing.md,
+  scrollContent: {
     paddingBottom: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    borderBottomLeftRadius: borderRadius.large,
-    borderBottomRightRadius: borderRadius.large,
   },
-  headerContent: {
+
+  header: {
+    paddingTop: 56,
+    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
-  },
-  headerEmoji: {
-    width: 40,
-    height: 40,
-    marginBottom: spacing.sm,
-    resizeMode: 'contain',
-    tintColor: colors.sand,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 64,
     color: colors.white,
-    marginBottom: spacing.xs,
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginBottom: spacing.xl + 32,
   },
-  subtitle: {
-    fontSize: 14,
-    color: colors.seafoam,
+
+  iconNeon: {
+    tintColor: colors.auth.neon,
   },
+
   card: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    backgroundColor: colors.pearl,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.auth.glass,
     borderRadius: borderRadius.large,
-    padding: spacing.lg,
-    ...shadows.medium,
-    borderWidth: 2,
-    borderColor: colors.oceanBright + '30',
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginHorizontal: -spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    marginBottom: spacing.sm,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.auth.neon,
+  },
+  cardTitle: {
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 20,
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+  cardHeaderIcon: {
+    width: 22,
+    height: 22,
+    resizeMode: 'contain',
+  },
+
+  fieldRow: {
+    paddingVertical: spacing.sm,
   },
   fieldLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 12,
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
+    marginBottom: 4,
   },
   fieldValue: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.oceanDeep,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 18,
+    color: colors.white,
+    letterSpacing: 0.3,
   },
-  divider: {
-    height: 1,
-    backgroundColor: colors.oceanBright + '40',
-    marginVertical: spacing.md,
+  fieldDivider: {
+    height: 0.5,
+    backgroundColor: colors.auth.neonSoft,
+    marginVertical: spacing.xs,
   },
-  logoutButton: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.xl,
-    backgroundColor: colors.coral,
-    borderRadius: borderRadius.large,
-    paddingVertical: spacing.md + 2,
+
+  legalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+  },
+  legalLabel: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 16,
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+
+  actionsCard: {
+    marginHorizontal: spacing.md,
+    gap: spacing.sm,
+  },
+  outlineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    borderRadius: borderRadius.round,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.auth.glass,
+    minHeight: 52,
+    justifyContent: 'center',
+  },
+  outlineButtonIcon: {
+    width: 20,
+    height: 20,
+    resizeMode: 'contain',
+    marginRight: spacing.sm,
+  },
+  outlineButtonText: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 22,
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+  chevron: {
+    fontSize: 28,
+    color: colors.auth.neon,
+    fontWeight: '300',
+    lineHeight: 28,
+    marginTop: -2,
+  },
+
+  deleteButton: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.medium,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.large,
-    borderWidth: 3,
-    borderColor: colors.oceanDeep,
+    minHeight: 48,
+    borderWidth: 0.5,
+    borderColor: colors.coral,
+    backgroundColor: 'rgba(229, 57, 53, 0.15)',
   },
-  logoutButtonDisabled: {
+  buttonDisabled: {
     opacity: 0.6,
   },
-  logoutButtonText: {
-    color: colors.white,
-    fontSize: 17,
-    fontWeight: 'bold',
+  deleteButtonText: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 16,
+    color: colors.coral,
+    letterSpacing: 1,
   },
 });

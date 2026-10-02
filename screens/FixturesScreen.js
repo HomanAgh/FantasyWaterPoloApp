@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,10 @@ import {
   ActivityIndicator,
   RefreshControl,
   Image,
+  Dimensions,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
-import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import {
   fetchFixturesForRound,
   fetchTopPerformers,
@@ -20,14 +21,23 @@ import {
 } from '../services/fixtureService';
 import { useRound } from '../context/RoundContext';
 
+const ROUND_TAB_W = 52;
+const ROUND_TAB_GAP = spacing.sm;
+
 export default function FixturesScreen() {
   const [fixtures, setFixtures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [topPerformersMap, setTopPerformersMap] = useState({});
   const [selectedRoundId, setSelectedRoundId] = useState(null);
-  
+
+  const roundTabsScrollRef = useRef(null);
   const { currentRound, allRounds, loadAllRounds } = useRound();
+
+  const sortedRounds = useMemo(
+    () => [...(allRounds || [])].sort((a, b) => a.round_number - b.round_number),
+    [allRounds],
+  );
 
   useEffect(() => {
     if (currentRound) {
@@ -45,32 +55,50 @@ export default function FixturesScreen() {
     }
   }, [selectedRoundId]);
 
+  useEffect(() => {
+    if (!selectedRoundId || sortedRounds.length === 0) return;
+
+    const index = sortedRounds.findIndex(r => r.id === selectedRoundId);
+    if (index < 0) return;
+
+    const timer = setTimeout(() => {
+      const { width } = Dimensions.get('window');
+      const tabStride = ROUND_TAB_W + ROUND_TAB_GAP;
+      const x = Math.max(
+        0,
+        index * tabStride - width / 2 + ROUND_TAB_W / 2 + spacing.md,
+      );
+      roundTabsScrollRef.current?.scrollTo({ x, animated: true });
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, [selectedRoundId, sortedRounds]);
+
   const loadFixtures = async () => {
     if (!selectedRoundId) return;
-    
+
     setLoading(true);
     const { data, error } = await fetchFixturesForRound(selectedRoundId);
-    
+
     if (!error && data) {
       setFixtures(data);
-      // Load top performers for finished matches
       loadTopPerformersForFixtures(data);
     }
-    
+
     setLoading(false);
   };
 
   const loadTopPerformersForFixtures = async (fixturesList) => {
     const finishedFixtures = fixturesList.filter(f => f.status === 'finished');
     const performersData = {};
-    
+
     for (const fixture of finishedFixtures) {
       const { data, error } = await fetchTopPerformers(fixture.id, 3);
       if (!error && data) {
         performersData[fixture.id] = data;
       }
     }
-    
+
     setTopPerformersMap(performersData);
   };
 
@@ -85,53 +113,51 @@ export default function FixturesScreen() {
   };
 
   const renderRoundTabs = () => {
-    if (!allRounds || allRounds.length === 0) return null;
-    
-    // Show only the last 5 rounds for simplicity (most recent, in ascending order)
-    const recentRounds = [...allRounds]
-      .sort((a, b) => a.round_number - b.round_number)
-      .slice(-5);
-    
+    if (sortedRounds.length === 0) return null;
+
     return (
       <View style={styles.roundTabsContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {recentRounds.map((round) => (
-            <TouchableOpacity
-              key={round.id}
-              style={[
-                styles.roundTab,
-                selectedRoundId === round.id && styles.roundTabActive,
-              ]}
-              onPress={() => handleRoundSelect(round.id)}
-              activeOpacity={0.7}>
-              <Text
-                style={[
-                  styles.roundTabText,
-                  selectedRoundId === round.id && styles.roundTabTextActive,
-                ]}>
-                GW {round.round_number}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <ScrollView
+          ref={roundTabsScrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.roundTabsScroll}
+        >
+          {sortedRounds.map((round) => {
+            const isActive = selectedRoundId === round.id;
+            return (
+              <TouchableOpacity
+                key={round.id}
+                style={[styles.roundTab, isActive && styles.roundTabActive]}
+                onPress={() => handleRoundSelect(round.id)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.roundTabLabel, isActive && styles.roundTabLabelActive]}>
+                  GW
+                </Text>
+                <Text style={[styles.roundTabNumber, isActive && styles.roundTabNumberActive]}>
+                  {round.round_number}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
     );
   };
 
   const renderRoundInfo = () => {
-    const currentRound = allRounds?.find(r => r.id === selectedRoundId);
-    if (!currentRound) return null;
+    const selectedRound = allRounds?.find(r => r.id === selectedRoundId);
+    if (!selectedRound) return null;
 
     const matchCount = fixtures.length;
-    
+
     return (
       <View style={styles.roundInfoBanner}>
-        <View style={styles.roundInfoContent}>
-          <Text style={styles.roundInfoTitle}>Gameweek {currentRound.round_number}</Text>
-          <Text style={styles.roundInfoSubtitle}>
-            {matchCount} {matchCount === 1 ? 'match' : 'matches'}
-          </Text>
-        </View>
+        <Text style={styles.roundInfoTitle}>GAMEWEEK {selectedRound.round_number}</Text>
+        <Text style={styles.roundInfoSubtitle}>
+          {matchCount} {matchCount === 1 ? 'Match' : 'Matches'}
+        </Text>
       </View>
     );
   };
@@ -141,35 +167,38 @@ export default function FixturesScreen() {
     const topPerformers = topPerformersMap[fixture.id] || [];
     const homeTeamName = fixture.home_team?.name || 'TBD';
     const awayTeamName = fixture.away_team?.name || 'TBD';
-    
+
     return (
       <View key={fixture.id} style={styles.fixtureCard}>
-        {/* Match Header */}
         <View style={styles.matchHeader}>
           <View style={styles.teamsContainer}>
             <View style={styles.teamRow}>
               <Text style={styles.teamName} numberOfLines={1}>
                 {homeTeamName}
               </Text>
-              {fixture.status !== 'scheduled' && fixture.home_score !== null && (
-                <Text style={styles.score}>{fixture.home_score}</Text>
-              )}
+              <View style={styles.scoreSlot}>
+                {fixture.status !== 'scheduled' && fixture.home_score !== null && (
+                  <Text style={styles.score}>{fixture.home_score}</Text>
+                )}
+              </View>
             </View>
             <View style={styles.vsContainer}>
-              <Text style={styles.vsText}>vs</Text>
+              <Text style={styles.vsText}>VS</Text>
+              <View style={styles.scoreSlot} />
             </View>
             <View style={styles.teamRow}>
               <Text style={styles.teamName} numberOfLines={1}>
                 {awayTeamName}
               </Text>
-              {fixture.status !== 'scheduled' && fixture.away_score !== null && (
-                <Text style={styles.score}>{fixture.away_score}</Text>
-              )}
+              <View style={styles.scoreSlot}>
+                {fixture.status !== 'scheduled' && fixture.away_score !== null && (
+                  <Text style={styles.score}>{fixture.away_score}</Text>
+                )}
+              </View>
             </View>
           </View>
         </View>
 
-        {/* Match Info */}
         <View style={styles.matchInfo}>
           <Text style={styles.matchDate}>
             {formatMatchDate(fixture.match_date)}
@@ -177,21 +206,25 @@ export default function FixturesScreen() {
           <View
             style={[
               styles.statusBadge,
-              { backgroundColor: statusStyle.backgroundColor },
-            ]}>
+              { borderColor: statusStyle.color + '80' },
+            ]}
+          >
             {fixture.status === 'scheduled' && (
-              <Image source={Icons.calendar} style={styles.statusIcon} />
+              <Image
+                source={Icons.calendar}
+                style={[styles.statusIcon, { tintColor: statusStyle.color }]}
+              />
             )}
             <Text style={[styles.statusText, { color: statusStyle.color }]}>
-              {fixture.status !== 'scheduled' ? `${statusStyle.emoji} ` : ''}{statusStyle.label}
+              {fixture.status !== 'scheduled' ? `${statusStyle.emoji} ` : ''}
+              {statusStyle.label.toUpperCase()}
             </Text>
           </View>
         </View>
 
-        {/* Top Performers (only for finished matches) */}
         {fixture.status === 'finished' && topPerformers.length > 0 && (
           <View style={styles.performersContainer}>
-            <Text style={styles.performersTitle}>⭐ Top Performers</Text>
+            <Text style={styles.performersTitle}>TOP PERFORMERS</Text>
             {topPerformers.map((performer, index) => (
               <View key={performer.id} style={styles.performerRow}>
                 <View style={styles.performerRank}>
@@ -205,13 +238,12 @@ export default function FixturesScreen() {
                     {formatPlayerStats(performer)}
                   </Text>
                 </View>
-                <Text style={styles.performerPoints}>{performer.points_earned} pts</Text>
+                <Text style={styles.performerPoints}>{performer.points_earned} PTS</Text>
               </View>
             ))}
           </View>
         )}
 
-        {/* Venue (if available) */}
         {fixture.venue && (
           <View style={styles.venueContainer}>
             <Image source={Icons.field} style={styles.venueIcon} />
@@ -223,53 +255,50 @@ export default function FixturesScreen() {
   };
 
   const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Image source={Icons.player} style={styles.emptyEmoji} />
-      <Text style={styles.emptyText}>No fixtures scheduled</Text>
+    <View style={styles.emptyCard}>
+      <Image source={Icons.bigcalender} style={styles.emptyIcon} />
+      <Text style={styles.emptyTitle}>NO FIXTURES SCHEDULED</Text>
       <Text style={styles.emptySubtext}>
-        Check back soon for upcoming matches!
+        Check back soon{'\n'}for upcoming matches.
       </Text>
     </View>
   );
 
   return (
     <View style={styles.container}>
-      {/* Ocean-themed header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Image source={Icons.calendar} style={styles.waveEmoji} />
-          <Text style={styles.title}>Fixtures</Text>
-          <Text style={styles.subtitle}>Match schedule & results</Text>
-        </View>
-      </View>
-
-      {/* Round Tabs */}
-      {renderRoundTabs()}
-
-      {/* Round Info Banner */}
-      {renderRoundInfo()}
-
-      {/* Fixtures List */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.oceanMedium}
-            colors={[colors.oceanMedium]}
+            tintColor={colors.auth.neon}
+            colors={[colors.auth.neon]}
           />
-        }>
+        }
+      >
+        {/* ── Header ── */}
+        <View style={styles.header}>
+          <Text style={styles.title}>FIXTURES</Text>
+          <Text style={styles.subtitle}>MATCH SCHEDULE AND RESULTS</Text>
+        </View>
+
+        {renderRoundTabs()}
+        {renderRoundInfo()}
+
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.oceanMedium} />
-            <Text style={styles.loadingText}>Loading fixtures...</Text>
+            <ActivityIndicator size="large" color={colors.auth.neon} />
+            <Text style={styles.loadingText}>LOADING FIXTURES...</Text>
           </View>
         ) : fixtures.length === 0 ? (
           renderEmptyState()
         ) : (
-          fixtures.map((fixture) => renderFixtureCard(fixture))
+          <View style={styles.fixturesList}>
+            {fixtures.map((fixture) => renderFixtureCard(fixture))}
+          </View>
         )}
       </ScrollView>
     </View>
@@ -279,101 +308,128 @@ export default function FixturesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
-  },
-  header: {
-    backgroundColor: colors.oceanDeep,
-    paddingTop: 60,
-    paddingBottom: 30,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    ...shadows.large,
-  },
-  headerContent: {
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-  },
-  waveEmoji: {
-    width: 48,
-    height: 48,
-    marginBottom: 8,
-    resizeMode: 'contain',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.white,
-    marginBottom: 5,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.oceanBright,
-    fontWeight: '500',
-  },
-  roundTabsContainer: {
-    backgroundColor: colors.pearl,
-    marginHorizontal: spacing.md,
-    marginTop: -15,
-    marginBottom: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    borderRadius: borderRadius.medium,
-    ...shadows.medium,
-    borderWidth: 2,
-    borderColor: colors.sand + '50',
-  },
-  roundTab: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginHorizontal: spacing.xs,
-    borderRadius: borderRadius.medium,
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.sand + '40',
-  },
-  roundTabActive: {
-    backgroundColor: colors.oceanMedium,
-    borderColor: colors.oceanMedium,
-  },
-  roundTabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  roundTabTextActive: {
-    color: colors.white,
+    backgroundColor: 'transparent',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: spacing.md,
+    paddingBottom: spacing.xl,
+  },
+
+  header: {
+    paddingTop: 56,
+    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  title: {
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 64,
+    color: colors.white,
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 16,
+    color: colors.white,
+    letterSpacing: 1.5,
+    marginTop: 4,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+  },
+
+  roundTabsContainer: {
+    marginBottom: spacing.md,
+  },
+  roundTabsScroll: {
+    paddingHorizontal: spacing.md,
+    paddingRight: spacing.md + ROUND_TAB_W / 2,
+    gap: ROUND_TAB_GAP,
+  },
+  roundTab: {
+    width: ROUND_TAB_W,
+    height: 64,
+    backgroundColor: colors.auth.glass,
+    borderRadius: borderRadius.small,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roundTabActive: {
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    backgroundColor: colors.auth.inputBg,
+  },
+  roundTabLabel: {
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 16,
+    color: colors.auth.statLabel,
+    letterSpacing: 0.5,
+  },
+  roundTabLabelActive: {
+    color: colors.auth.neon,
+  },
+  roundTabNumber: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 24,
+    color: colors.white,
+    marginTop: 0,
+  },
+  roundTabNumberActive: {
+    color: colors.white,
+  },
+
+  roundInfoBanner: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.sand,
+    backgroundColor: colors.auth.inputBg,
+    alignItems: 'center',
+  },
+  roundInfoTitle: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 24,
+    color: colors.sand,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  roundInfoSubtitle: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 16,
+    color: colors.white,
+  },
+
+  fixturesList: {
+    paddingHorizontal: spacing.md,
   },
   loadingContainer: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: spacing.xxl,
   },
   loadingText: {
     marginTop: spacing.md,
-    fontSize: 16,
-    color: colors.textMuted,
-    fontWeight: '500',
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 14,
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
   },
+
   fixtureCard: {
-    backgroundColor: colors.pearl,
-    borderRadius: borderRadius.large,
-    padding: spacing.lg,
+    backgroundColor: colors.auth.glass,
+    borderRadius: borderRadius.medium,
+    padding: spacing.md,
     marginBottom: spacing.md,
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.sand + '50',
-    borderLeftWidth: 4,
-    borderLeftColor: colors.sand,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
   },
   matchHeader: {
     marginBottom: spacing.md,
@@ -388,99 +444,107 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   teamName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.textDark,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 24,
+    color: colors.white,
     flex: 1,
     marginRight: spacing.sm,
     textAlign: 'center',
   },
-  score: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.oceanMedium,
+  scoreSlot: {
     minWidth: 40,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  score: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 24,
+    color: colors.sand,
     textAlign: 'right',
   },
   vsContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: spacing.xs,
   },
   vsText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textMuted,
+    flex: 1,
+    marginRight: spacing.sm,
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 16,
+    color: colors.auth.placeholder,
+    letterSpacing: 1,
+    textAlign: 'center',
   },
   matchInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.oceanBright + '20',
+    borderTopWidth: 0.5,
+    borderTopColor: colors.auth.neonSoft,
   },
   matchDate: {
-    fontSize: 14,
-    color: colors.textMuted,
-    fontWeight: '500',
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 18,
+    color: colors.auth.placeholder,
   },
   statusBadge: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderRadius: borderRadius.medium,
-    borderWidth: 1,
-    borderColor: colors.sand + '50',
+    borderRadius: borderRadius.small,
+    borderWidth: 0.5,
+    backgroundColor: colors.auth.inputBg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
   statusIcon: {
-    width: 12,
-    height: 12,
+    width: 24,
+    height: 24,
     resizeMode: 'contain',
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 11,
     letterSpacing: 0.5,
   },
   performersContainer: {
     marginTop: spacing.md,
     paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.oceanBright + '20',
-    backgroundColor: colors.oceanBright + '10',
-    marginHorizontal: -spacing.lg,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    borderTopWidth: 0.5,
+    borderTopColor: colors.auth.neonSoft,
   },
   performersTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.oceanDeep,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 18,
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
     marginBottom: spacing.sm,
   },
   performerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: spacing.sm,
-    backgroundColor: colors.pearl,
-    borderRadius: borderRadius.medium,
+    backgroundColor: colors.auth.inputBg,
+    borderRadius: borderRadius.small,
     marginBottom: spacing.xs,
     paddingHorizontal: spacing.sm,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neonSoft,
   },
   performerRank: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.oceanMedium,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.auth.neon,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.sm,
   },
   performerRankText: {
+    fontFamily: fonts.barlowCondensedExtraBold,
     fontSize: 14,
-    fontWeight: 'bold',
     color: colors.white,
   },
   performerInfo: {
@@ -488,27 +552,28 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   performerName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textDark,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 20,
+    color: colors.white,
     marginBottom: 2,
   },
   performerStats: {
-    fontSize: 12,
-    color: colors.textMuted,
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 16,
+    color: colors.auth.placeholder,
   },
   performerPoints: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.oceanMedium,
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 20,
+    color: colors.sand,
     minWidth: 50,
     textAlign: 'right',
   },
   venueContainer: {
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.oceanBright + '20',
+    borderTopWidth: 0.5,
+    borderTopColor: colors.auth.neonSoft,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -517,62 +582,43 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     resizeMode: 'contain',
+    tintColor: colors.auth.neon,
   },
   venueText: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 12,
-    color: colors.textMuted,
-    fontStyle: 'italic',
+    color: colors.auth.placeholder,
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: spacing.xxl,
+
+  emptyCard: {
+    marginHorizontal: spacing.md,
+    backgroundColor: colors.auth.glass,
+    borderRadius: borderRadius.large,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    paddingVertical: spacing.xl,
     paddingHorizontal: spacing.lg,
+    alignItems: 'center',
   },
-  emptyEmoji: {
-    width: 64,
-    height: 64,
-    marginBottom: spacing.md,
+  emptyIcon: {
+    width: 80,
+    height: 80,
     resizeMode: 'contain',
+    marginBottom: spacing.lg,
   },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
+  emptyTitle: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 24,
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
     textAlign: 'center',
+    marginBottom: spacing.sm,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: colors.textMuted,
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 18,
+    color: colors.white,
     textAlign: 'center',
-  },
-  roundInfoBanner: {
-    backgroundColor: colors.pearl,
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.medium,
-    ...shadows.small,
-    borderWidth: 1,
-    borderColor: colors.sand + '50',
-    borderLeftWidth: 4,
-    borderLeftColor: colors.sand,
-  },
-  roundInfoContent: {
-    alignItems: 'center',
-  },
-  roundInfoTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.oceanDeep,
-    marginBottom: 4,
-  },
-  roundInfoSubtitle: {
-    fontSize: 14,
-    color: colors.textMuted,
-    fontWeight: '500',
+    lineHeight: 22,
   },
 });

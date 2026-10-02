@@ -1,4 +1,5 @@
 import supabase from '../config/supabaseClient';
+import { isJwtIssuedAtFutureError } from '../utils/supabaseAuthRetry';
 
 /**
  * Fetch user's team with full player and team details
@@ -46,7 +47,12 @@ export const getUserTeam = async (userId) => {
 
     return { data: transformedData, error: null };
   } catch (error) {
-    console.error('Error fetching user team:', error);
+    // Clock-skew retries log once in withJwtClockSkewRetry; avoid red spam per attempt
+    if (isJwtIssuedAtFutureError(error)) {
+      console.warn('Error fetching user team (JWT clock skew, may retry):', error.message || error);
+    } else {
+      console.error('Error fetching user team:', error);
+    }
     return { data: null, error };
   }
 };
@@ -56,7 +62,7 @@ export const getUserTeam = async (userId) => {
  * @param {string} userId - User ID
  * @param {string} playerId - Player UUID
  * @param {boolean} isStarter - Whether player is a starter (default: false)
- * @param {number|null} positionOrder - Position order (1-12) for auto-substitution
+ * @param {number|null} positionOrder - Position order (1-9) for auto-substitution
  * @returns {Promise<{data: Object, error: Error|null}>}
  */
 export const addPlayerToTeam = async (userId, playerId, isStarter = false, positionOrder = null) => {

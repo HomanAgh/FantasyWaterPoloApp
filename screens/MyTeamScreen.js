@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
-import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
 import { useAuth } from '../context/AuthContext';
@@ -22,7 +22,13 @@ import {
   getSnapshotRoundIds,
   getGwPicksForRound,
   getDeductionForRound,
+  scorePicksWithAutoSub,
 } from '../services/userGwPicksService';
+import {
+  fetchAppearanceMap,
+  picksFromSelectedPlayers,
+  resolveSquadPointsWithAutoSub,
+} from '../services/autoSubstitutionService';
 import supabase from '../config/supabaseClient';
 
 export default function MyTeamScreen({ navigation }) {
@@ -30,6 +36,7 @@ export default function MyTeamScreen({ navigation }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [swapModalVisible, setSwapModalVisible] = useState(false);
   const [enrichedPlayers, setEnrichedPlayers] = useState([]);
+  const [liveGameweekPoints, setLiveGameweekPoints] = useState(0);
 
   // GW history state
   const [selectedGwId, setSelectedGwId] = useState(null); // null = current GW
@@ -59,6 +66,11 @@ export default function MyTeamScreen({ navigation }) {
     outfieldCount,
     isTeamValid,
     teamName,
+    isLoading: isTeamLoading,
+    teamLoadError,
+    loadUserTeam,
+    MAX_PLAYERS,
+    MAX_OUTFIELD,
   } = useTeam();
 
   const { userId } = useAuth();
@@ -69,19 +81,30 @@ export default function MyTeamScreen({ navigation }) {
     const loadGameweekPoints = async () => {
       if (!currentRound || selectedPlayers.length === 0) {
         setEnrichedPlayers(selectedPlayers);
+        setLiveGameweekPoints(0);
         return;
       }
       const playerIds = selectedPlayers.map(p => p.id);
-      const { data: pointsMap } = await playerRoundPointsService
-        .getMultiplePlayersPointsForRound(playerIds, currentRound.id);
+      const [{ data: pointsMap }, appearanceMap] = await Promise.all([
+        playerRoundPointsService.getMultiplePlayersPointsForRound(playerIds, currentRound.id),
+        fetchAppearanceMap(playerIds, currentRound.id),
+      ]);
       const enriched = selectedPlayers.map(p => ({
         ...p,
         points: pointsMap[p.id] || 0,
       }));
       setEnrichedPlayers(enriched);
+
+      const picks = picksFromSelectedPlayers(selectedPlayers, captainId);
+      const { total } = resolveSquadPointsWithAutoSub(
+        picks,
+        appearanceMap,
+        pointsMap || {}
+      );
+      setLiveGameweekPoints(total);
     };
     loadGameweekPoints();
-  }, [currentRound, selectedPlayers]);
+  }, [currentRound, selectedPlayers, captainId]);
 
   // ── Load past rounds for GW picker on mount ──
   useEffect(() => {
@@ -126,9 +149,9 @@ export default function MyTeamScreen({ navigation }) {
     }
 
     const allPlayerIds = picks.map(p => p.player_id);
-    const [{ data: pointsMap }, { data: playerRows }] = await Promise.all([
-      playerRoundPointsService.getMultiplePlayersPointsForRound(allPlayerIds, roundId),
+    const [{ data: playerRows }, scored] = await Promise.all([
       fetchPlayersByIds(allPlayerIds),
+      scorePicksWithAutoSub(picks, roundId),
     ]);
 
     const playerInfoMap = {};
@@ -137,8 +160,20 @@ export default function MyTeamScreen({ navigation }) {
     const captain = picks.find(p => p.is_captain);
     setHistoryCaptainId(captain?.player_id || null);
 
+    const slotByStarter = {};
+    (scored.slots || []).forEach(slot => {
+      slotByStarter[slot.starterId] = slot;
+    });
+    const usedBenchIds = scored.usedBenchIds || new Set();
+
     const enriched = picks.map(pick => {
       const info = playerInfoMap[pick.player_id] || {};
+      const slot = slotByStarter[pick.player_id];
+      const ownPoints = scored.pointsMap?.[pick.player_id] ?? 0;
+      // Starters show points that counted for their slot (incl. auto-sub)
+      const displayPoints = pick.is_starter
+        ? (slot?.rawPoints ?? 0)
+        : ownPoints;
       return {
         id: pick.player_id,
         name: info.name || 'Unknown',
@@ -147,17 +182,16 @@ export default function MyTeamScreen({ navigation }) {
         price: info.price ? parseFloat(info.price) : 0,
         isStarter: pick.is_starter,
         isCaptain: pick.is_captain,
-        points: pointsMap[pick.player_id] ?? 0,
-        positionOrder: 0,
+        points: displayPoints,
+        positionOrder: pick.position_order ?? 0,
+        wasAutoSub: !!slot?.wasAutoSub,
+        autoSubFromId: slot?.wasAutoSub ? slot.usedPlayerId : null,
+        autoSubbedIn: usedBenchIds.has(pick.player_id),
       };
     });
 
-    const gwScore = enriched
-      .filter(p => p.isStarter)
-      .reduce((sum, p) => sum + (p.isCaptain ? p.points * 2 : p.points), 0);
-
     setHistoryPlayers(enriched);
-    setHistoryGwScore(gwScore);
+    setHistoryGwScore(scored.total || 0);
     setLoadingHistory(false);
   }, [userId, pastRounds]);
 
@@ -173,20 +207,6 @@ export default function MyTeamScreen({ navigation }) {
       return { data: [] };
     }
   };
-
-  // ── Live GW points (current mode only) ──
-  const liveGameweekPoints = React.useMemo(() => {
-    if (enrichedPlayers.length === 0) return 0;
-    return enrichedPlayers
-      .filter(p => p.isStarter)
-      .reduce((sum, player) => {
-        const pts = player.points || 0;
-        return sum + (player.id === captainId ? pts * 2 : pts);
-      }, 0);
-  }, [enrichedPlayers, captainId]);
-
-  // ── History derived values ──
-  const historyNet = Math.max(0, historyGwScore - historyDeduction);
 
   // ── What to pass to PitchView ──
   const displayPlayers = isHistoryMode ? historyPlayers : enrichedPlayers;
@@ -245,15 +265,15 @@ export default function MyTeamScreen({ navigation }) {
   };
 
   const getDeadlineText = () => {
-    if (!currentRound) return 'No active round';
-    if (isLocked) return `Gameweek ${currentRound.round_number} - In Progress`;
+    if (!currentRound) return 'NO ACTIVE ROUND';
+    if (isLocked) return `GAMEWEEK ${currentRound.round_number} — LIVE`;
     if (timeToDeadline) {
       const { days, hours, minutes } = timeToDeadline;
-      if (days > 0) return `Deadline: ${days}d ${hours}h`;
-      if (hours > 0) return `Deadline: ${hours}h ${minutes}m`;
-      return `Deadline: ${minutes}m`;
+      if (days > 0) return `DEADLINE: ${days}D ${hours}H`;
+      if (hours > 0) return `DEADLINE: ${hours}H ${minutes}M`;
+      return `DEADLINE: ${minutes}M`;
     }
-    return formatDeadline ? formatDeadline(currentRound.deadline) : 'Deadline passed';
+    return formatDeadline ? formatDeadline(currentRound.deadline) : 'DEADLINE PASSED';
   };
 
   return (
@@ -262,55 +282,28 @@ export default function MyTeamScreen({ navigation }) {
       {/* ── Header ── */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Image source={Icons.swimmer} style={styles.teamEmoji} />
-          <Text style={styles.title}>{teamName}</Text>
+          <Image source={Icons.splash} style={styles.teamEmoji} />
+          <Text style={styles.title}>{(teamName || 'MY TEAM').toUpperCase()}</Text>
 
-          {isHistoryMode ? (
-            /* History mode: GW score summary */
-            <View style={styles.historyScoreRow}>
-              <View style={styles.historyScoreBlock}>
-                <Text style={styles.historyScoreLabel}>GW {historyRound?.round_number ?? '—'}</Text>
-                <Text style={styles.historyScoreValue}>{historyGwScore}</Text>
-                <Text style={styles.historyScoreUnit}>pts</Text>
-              </View>
-              {historyDeduction > 0 && (
-                <>
-                  <View style={styles.historyScoreDivider} />
-                  <View style={styles.historyScoreBlock}>
-                    <Text style={styles.historyScoreLabel}>HIT</Text>
-                    <Text style={[styles.historyScoreValue, styles.historyScoreHit]}>
-                      -{historyDeduction}
-                    </Text>
-                  </View>
-                  <View style={styles.historyScoreDivider} />
-                  <View style={styles.historyScoreBlock}>
-                    <Text style={styles.historyScoreLabel}>NET</Text>
-                    <Text style={[styles.historyScoreValue, styles.historyScoreNet]}>
-                      {historyNet}
-                    </Text>
-                  </View>
-                </>
-              )}
-            </View>
-          ) : (
-            /* Current mode: Budget / Points / Squad badges */
+          {!isHistoryMode && (
             <>
               <View style={styles.statsRow}>
                 <View style={styles.statBadge}>
-                  <Text style={styles.statLabel}>Budget</Text>
+                  <Text style={styles.statLabel}>BUDGET</Text>
                   <Text style={styles.statValue}>${remainingBudget.toFixed(1)}M</Text>
                 </View>
                 <View style={styles.statBadge}>
-                  <Text style={styles.statLabel}>Points</Text>
+                  <Text style={styles.statLabel}>POINTS</Text>
                   <Text style={styles.statValue}>{liveGameweekPoints}</Text>
                 </View>
                 <View style={[styles.statBadge, isTeamValid() && styles.statBadgeSuccess]}>
-                  <Text style={styles.statLabel}>Squad</Text>
-                  <Text style={styles.statValue}>{selectedPlayers.length}/{12}</Text>
+                  <Text style={styles.statLabel}>SQUAD</Text>
+                  <Text style={styles.statValue}>{selectedPlayers.length}/{MAX_PLAYERS}</Text>
                 </View>
               </View>
               {currentRound && (
                 <View style={styles.deadlineBadge}>
+                  <Image source={Icons.clock} style={styles.deadlineIcon} />
                   <Text style={styles.deadlineText}>{getDeadlineText()}</Text>
                 </View>
               )}
@@ -331,7 +324,7 @@ export default function MyTeamScreen({ navigation }) {
               onPress={() => setSelectedGwId(null)}
               activeOpacity={0.8}>
               <Text style={[styles.gwTabText, !isHistoryMode && styles.gwTabTextActive]}>
-                Current
+                CURRENT
               </Text>
             </TouchableOpacity>
             {pastRounds.map(r => {
@@ -352,12 +345,21 @@ export default function MyTeamScreen({ navigation }) {
         </View>
       )}
 
-      {/* ── History read-only banner ── */}
+      {/* ── History GW score (below picker — tied to selected GW) ── */}
       {isHistoryMode && (
-        <View style={styles.historyBanner}>
-          <Text style={styles.historyBannerText}>
-            Viewing GW{historyRound?.round_number} snapshot — read only
-          </Text>
+        <View style={styles.historyStatsWrapper}>
+          <View style={styles.statsRow}>
+            <View style={[styles.statBadge, styles.historyStatBadge]}>
+              <Text style={styles.statLabel}>GW {historyRound?.round_number ?? '—'}</Text>
+              <Text style={styles.statValue}>{historyGwScore}</Text>
+            </View>
+            {historyDeduction > 0 && (
+              <View style={[styles.statBadge, styles.historyStatBadge]}>
+                <Text style={styles.statLabel}>HIT</Text>
+                <Text style={[styles.statValue, styles.statValueHit]}>-{historyDeduction}</Text>
+              </View>
+            )}
+          </View>
         </View>
       )}
 
@@ -371,16 +373,44 @@ export default function MyTeamScreen({ navigation }) {
         </View>
       )}
 
-      {/* ── Incomplete team warning (current mode only) ── */}
-      {!isHistoryMode && !isTeamValid() && selectedPlayers.length > 0 && (
-        <View style={styles.warningBanner}>
-          <Image source={Icons.warning} style={styles.warningIcon} />
+      {/* ── Sync error (current mode only) ── */}
+      {!isHistoryMode && teamLoadError && !isTeamLoading && (
+        <View style={styles.syncErrorBanner}>
           <View style={styles.warningContent}>
-            <Text style={styles.warningTitle}>Complete Your Team</Text>
+            <Text style={styles.syncErrorTitle}>Couldn't sync team</Text>
+            <Text style={styles.warningText}>{teamLoadError}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.syncRetryButton}
+            onPress={() => loadUserTeam()}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.syncRetryText}>RETRY</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── Syncing banner ── */}
+      {!isHistoryMode && isTeamLoading && (
+        <View style={styles.syncingBanner}>
+          <ActivityIndicator size="small" color={colors.auth.neon} />
+          <Text style={styles.syncingText}>Syncing your team…</Text>
+        </View>
+      )}
+
+      {/* ── Incomplete team nudge (current mode only; not during sync errors) ── */}
+      {!isHistoryMode && !isTeamLoading && !teamLoadError && !isTeamValid() && selectedPlayers.length > 0 && (
+        <View style={styles.warningBanner}>
+          <View style={styles.warningContent}>
+            <Text style={styles.warningTitle}>
+              {selectedPlayers.length < MAX_PLAYERS
+                ? `Add ${MAX_PLAYERS - selectedPlayers.length} more to complete your squad`
+                : 'Finish setting your squad'}
+            </Text>
             <Text style={styles.warningText}>
               {goalkeepersCount < 2 && `Need ${2 - goalkeepersCount} more GK • `}
-              {outfieldCount < 10 && `Need ${10 - outfieldCount} more Outfield • `}
-              {startersCount < 7 && selectedPlayers.length === 12 && `Set ${7 - startersCount} more starters`}
+              {outfieldCount < MAX_OUTFIELD && `Need ${MAX_OUTFIELD - outfieldCount} more Outfield • `}
+              {startersCount < 7 && selectedPlayers.length === MAX_PLAYERS && `Set ${7 - startersCount} more starters`}
             </Text>
           </View>
         </View>
@@ -389,7 +419,7 @@ export default function MyTeamScreen({ navigation }) {
       {/* ── Pitch ── */}
       {isHistoryMode && loadingHistory ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.oceanBright} />
+          <ActivityIndicator size="large" color={colors.auth.neon} />
           <Text style={styles.loadingText}>Loading GW{historyRound?.round_number}…</Text>
         </View>
       ) : displayPlayers.length > 0 ? (
@@ -403,17 +433,19 @@ export default function MyTeamScreen({ navigation }) {
         />
       ) : !isHistoryMode ? (
         <ScrollView style={styles.emptyContainer} contentContainerStyle={styles.emptyContent}>
-          <Image source={Icons.player} style={styles.emptyEmoji} />
-          <Text style={styles.emptyTitle}>No Players Yet</Text>
-          <Text style={styles.emptyText}>
-            Start building your team by adding players from the Players tab
-          </Text>
+          <View style={styles.emptyCard}>
+            <Image source={Icons.roboplayer} style={styles.emptyEmoji} />
+            <Text style={styles.emptyTitle}>START BUILDING YOUR TEAM</Text>
+            <Text style={styles.emptyText}>
+              {`You have a budget of $100M\nto build a squad of ${MAX_PLAYERS} players.`}
+            </Text>
+          </View>
           <TouchableOpacity
             style={styles.emptyButton}
             onPress={() => navigation.navigate('Players')}
-            activeOpacity={0.8}>
-            <Image source={Icons.player} style={styles.emptyButtonIcon} />
-            <Text style={styles.emptyButtonText}>Add Players</Text>
+            activeOpacity={0.8}
+          >
+            <Text style={styles.emptyButtonText}>ADD PLAYERS</Text>
           </TouchableOpacity>
         </ScrollView>
       ) : null}
@@ -435,7 +467,9 @@ export default function MyTeamScreen({ navigation }) {
                 <View style={styles.modalHeader}>
                   <View style={styles.modalPlayerInfo}>
                     <Image
-                      source={selectedPlayer.position === 'GK' ? Icons.goalie : Icons.player}
+                      source={
+                        selectedPlayer.position === 'GK' ? Icons.goalie : Icons.player1
+                      }
                       style={styles.modalPlayerEmoji}
                     />
                     <View>
@@ -474,8 +508,15 @@ export default function MyTeamScreen({ navigation }) {
                           ({selectedPlayer.points} × 2)
                         </Text>
                       )}
+                      {selectedPlayer.wasAutoSub && (
+                        <Text style={styles.historyBenchNote}>Auto-sub points counted</Text>
+                      )}
                       {!selectedPlayer.isStarter && (
-                        <Text style={styles.historyBenchNote}>Bench — did not count</Text>
+                        <Text style={styles.historyBenchNote}>
+                          {selectedPlayer.autoSubbedIn
+                            ? 'Auto-subbed into XI'
+                            : 'Bench — did not count'}
+                        </Text>
                       )}
                     </View>
                     <TouchableOpacity
@@ -584,7 +625,9 @@ export default function MyTeamScreen({ navigation }) {
                         activeOpacity={0.7}>
                         <View style={styles.swapPlayerInfo}>
                           <Image
-                            source={player.position === 'GK' ? Icons.goalie : Icons.player}
+                            source={
+                              player.position === 'GK' ? Icons.goalie : Icons.player1
+                            }
                             style={styles.swapPlayerEmoji}
                           />
                           <View style={styles.swapPlayerDetails}>
@@ -620,186 +663,141 @@ export default function MyTeamScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: 'transparent',
   },
 
-  // ── Header ──
   header: {
-    backgroundColor: colors.oceanDeep,
-    paddingTop: 60,
-    paddingBottom: spacing.lg,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    ...shadows.large,
+    paddingTop: 56,
+    paddingBottom: spacing.md,
   },
   headerContent: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
   },
-  teamEmoji: {
-    width: 48,
-    height: 48,
-    marginBottom: spacing.xs,
-    resizeMode: 'contain',
-  },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 42,
     color: colors.white,
-    marginBottom: spacing.md,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    letterSpacing: 1,
+    marginBottom: spacing.xl,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
   statsRow: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.sm,
+    gap: spacing.sm,
+    marginBottom: -spacing.sm,
+    width: '100%',
   },
   statBadge: {
-    backgroundColor: colors.oceanMedium + '40',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    flex: 1,
+    backgroundColor: colors.auth.glass,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md + 4,
     borderRadius: borderRadius.medium,
-    borderWidth: 2,
-    borderColor: colors.oceanBright + '60',
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
     alignItems: 'center',
-    minWidth: 90,
+    minHeight: 72,
+    justifyContent: 'center',
   },
   statBadgeSuccess: {
-    backgroundColor: colors.success + '30',
     borderColor: colors.success,
   },
   statLabel: {
-    fontSize: 11,
-    color: colors.oceanBright,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    marginBottom: 2,
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 18,
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
+    marginBottom: -2,
   },
   statValue: {
-    fontSize: 18,
-    color: colors.white,
-    fontWeight: 'bold',
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 28,
+    color: colors.auth.statValue,
+  },
+  statValueHit: {
+    color: colors.coral,
+  },
+  historyStatsWrapper: {
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  historyStatBadge: {
+    minHeight: 52,
+    paddingVertical: spacing.sm,
   },
   deadlineBadge: {
-    backgroundColor: colors.warning + '30',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.round,
-    borderWidth: 1,
-    borderColor: colors.warning,
-    marginTop: spacing.xs,
-  },
-  deadlineText: {
-    fontSize: 12,
-    color: colors.white,
-    fontWeight: '600',
-  },
-
-  // ── History mode header score ──
-  historyScoreRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.lg,
-    marginBottom: spacing.sm,
+    gap: 8,
+    width: '100%',
+    borderWidth: 0.5,
+    borderColor: colors.sand,
+    backgroundColor: colors.auth.inputBg,
+    borderRadius: borderRadius.medium,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.lg + 4,
+    marginTop: spacing.md,
   },
-  historyScoreBlock: {
-    alignItems: 'center',
+  deadlineIcon: {
+    width: 16,
+    height: 16,
+    resizeMode: 'contain',
+    tintColor: colors.sand,
   },
-  historyScoreLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.oceanBright,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 2,
-  },
-  historyScoreValue: {
-    fontSize: 44,
-    fontWeight: 'bold',
+  deadlineText: {
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 16,
     color: colors.sand,
-  },
-  historyScoreUnit: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: '600',
-    marginTop: -4,
-  },
-  historyScoreDivider: {
-    width: 1,
-    height: 52,
-    backgroundColor: colors.sand + '30',
-  },
-  historyScoreHit: {
-    color: colors.coral,
-    fontSize: 36,
-  },
-  historyScoreNet: {
-    color: '#4ADE80',
-    fontSize: 36,
+    letterSpacing: 0.5,
   },
 
-  // ── GW Picker bar ──
   gwPickerWrapper: {
-    backgroundColor: colors.oceanMedium,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.oceanBright + '30',
+    backgroundColor: 'transparent',
+    marginBottom: spacing.sm,
   },
   gwPickerScroll: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingVertical: 2,
+    paddingHorizontal: spacing.md,
   },
   gwTab: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.sm + 2,
     borderRadius: borderRadius.round,
-    borderWidth: 1,
-    borderColor: colors.oceanBright + '50',
-    marginRight: spacing.xs,
+    backgroundColor: colors.auth.inputBg,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
   },
   gwTabActive: {
-    backgroundColor: colors.sand,
-    borderColor: colors.sand,
+    backgroundColor: colors.auth.glass,
+    borderColor: colors.auth.neon,
+    shadowColor: colors.auth.neon,
+    shadowOpacity: 0.55,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
   },
   gwTabText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.oceanBright,
-    letterSpacing: 0.3,
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 24,
+    color: colors.white,
+    letterSpacing: 0.5,
   },
   gwTabTextActive: {
-    color: colors.oceanDeep,
+    color: colors.white,
   },
 
-  // ── History banner ──
-  historyBanner: {
-    backgroundColor: colors.oceanMedium + '30',
-    marginHorizontal: spacing.md,
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.medium,
-    borderWidth: 1,
-    borderColor: colors.oceanBright + '40',
-    alignItems: 'center',
-  },
-  historyBannerText: {
-    fontSize: 12,
-    color: colors.oceanMedium,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-
-  // ── Locked / warning banners ──
   lockedBanner: {
-    backgroundColor: colors.coral + '18',
+    backgroundColor: colors.coral + '22',
     marginHorizontal: spacing.md,
-    marginTop: spacing.md,
+    marginBottom: spacing.sm,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
-    borderWidth: 2,
+    borderWidth: 0.5,
     borderColor: colors.coral,
     flexDirection: 'row',
     alignItems: 'center',
@@ -812,21 +810,69 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
   },
   lockedText: {
-    fontSize: 14,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 18,
     color: colors.coral,
-    fontWeight: '700',
   },
   warningBanner: {
-    backgroundColor: colors.warning + '20',
+    backgroundColor: colors.auth.inputBg,
     marginHorizontal: spacing.md,
-    marginTop: spacing.md,
+    marginBottom: spacing.sm,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
-    borderWidth: 2,
-    borderColor: colors.warning,
+    borderWidth: 0.5,
+    borderColor: colors.sand,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  syncErrorBanner: {
+    backgroundColor: colors.auth.inputBg,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.coral,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  syncErrorTitle: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 14,
+    color: colors.coral,
+    marginBottom: 2,
+  },
+  syncRetryButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+  },
+  syncRetryText: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 12,
+    color: colors.auth.neon,
+    letterSpacing: 1,
+  },
+  syncingBanner: {
+    backgroundColor: colors.auth.inputBg,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neonSoft,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  syncingText: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 14,
+    color: colors.auth.placeholder,
   },
   warningIcon: {
     width: 24,
@@ -837,18 +883,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   warningTitle: {
+    fontFamily: fonts.barlowCondensedBold,
     fontSize: 14,
-    color: colors.textDark,
-    fontWeight: 'bold',
+    color: colors.sand,
     marginBottom: 2,
   },
   warningText: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 12,
-    color: colors.textMedium,
-    fontWeight: '600',
+    color: colors.white,
   },
 
-  // ── Loading ──
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -857,74 +902,81 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: spacing.md,
-    color: colors.textMuted,
+    fontFamily: fonts.barlowCondensedRegular,
+    color: colors.auth.placeholder,
     fontSize: 14,
-    fontWeight: '500',
   },
 
-  // ── Empty state ──
   emptyContainer: {
     flex: 1,
   },
   emptyContent: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.xl,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
+  },
+  emptyCard: {
+    width: '100%',
+    backgroundColor: colors.auth.glass,
+    borderRadius: borderRadius.large,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    padding: spacing.xs + 8,
+    alignItems: 'center',
   },
   emptyEmoji: {
-    width: 80,
-    height: 80,
-    marginBottom: spacing.lg,
+    width: 100,
+    height: 100,
     resizeMode: 'contain',
+    
+    opacity: 0.9,
   },
   emptyTitle: {
+    fontFamily: fonts.barlowCondensedExtraBold,
     fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.textDark,
+    color: '#7CB2FF',
+    letterSpacing: 1,
     marginBottom: spacing.sm,
   },
   emptyText: {
-    fontSize: 16,
-    color: colors.textMuted,
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 18,
+    color: colors.white,
     textAlign: 'center',
-    marginBottom: spacing.xl,
     lineHeight: 24,
   },
   emptyButton: {
-    backgroundColor: colors.oceanMedium,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.medium,
-    flexDirection: 'row',
+    width: '100%',
+    marginTop: spacing.lg,
+    backgroundColor: colors.auth.buttonTop,
+    paddingVertical: spacing.md + 4,
+    borderRadius: borderRadius.round,
     alignItems: 'center',
-    gap: spacing.sm,
-    ...shadows.medium,
-  },
-  emptyButtonIcon: {
-    width: 20,
-    height: 20,
-    resizeMode: 'contain',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.35)',
   },
   emptyButtonText: {
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
     color: colors.white,
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 24,
+    letterSpacing: 1,
   },
 
-  // ── Modals ──
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(2, 11, 24, 0.72)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.pearl,
+    backgroundColor: '#0A1A2E',
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    borderBottomWidth: 0,
     padding: spacing.xl,
     paddingBottom: spacing.xl + 20,
-    ...shadows.large,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -932,8 +984,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.lg,
     paddingBottom: spacing.md,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.oceanBright + '20',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.auth.neonSoft,
   },
   modalPlayerInfo: {
     flexDirection: 'row',
@@ -944,29 +996,29 @@ const styles = StyleSheet.create({
   modalPlayerEmoji: {
     width: 48,
     height: 48,
-    resizeMode: 'contain',
+    borderRadius: 24,
+    resizeMode: 'cover',
   },
   modalPlayerName: {
+    fontFamily: fonts.barlowCondensedExtraBold,
     fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.textDark,
+    color: colors.white,
     marginBottom: 4,
   },
   modalPlayerDetails: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 14,
-    color: colors.textMuted,
+    color: colors.auth.placeholder,
   },
   modalCaptainBadge: {
     backgroundColor: colors.sand,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.round,
-    borderWidth: 2,
-    borderColor: colors.oceanDeep,
   },
   modalCaptainText: {
+    fontFamily: fonts.barlowCondensedBold,
     fontSize: 12,
-    fontWeight: 'bold',
     color: colors.oceanDeep,
   },
   modalActions: {
@@ -978,98 +1030,96 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    ...shadows.small,
+    borderWidth: 0.5,
   },
   modalButtonCaptain: {
-    backgroundColor: '#FCD34D',
-    borderWidth: 2,
-    borderColor: '#F59E0B',
+    backgroundColor: colors.sand + '22',
+    borderColor: colors.sand,
   },
   modalButtonSwap: {
-    backgroundColor: colors.oceanBright + '30',
-    borderWidth: 2,
-    borderColor: colors.oceanMedium,
+    backgroundColor: colors.auth.inputBg,
+    borderColor: colors.auth.neon,
   },
   modalButtonCancel: {
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 2,
-    borderColor: colors.textMuted + '40',
+    backgroundColor: 'transparent',
+    borderColor: colors.auth.placeholder,
   },
   modalButtonIcon: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
     resizeMode: 'contain',
+    tintColor: colors.white,
   },
   modalButtonText: {
+    fontFamily: fonts.barlowCondensedBold,
     fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.textDark,
+    color: colors.white,
     flex: 1,
   },
   modalButtonSubtext: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 12,
-    fontWeight: '600',
-    color: '#92400E',
+    color: colors.sand,
   },
   modalButtonTextCancel: {
+    fontFamily: fonts.barlowCondensedBold,
     fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.textMuted,
+    color: colors.auth.placeholder,
     textAlign: 'center',
     flex: 1,
   },
 
-  // ── History mode player modal ──
   historyPointsBox: {
-    backgroundColor: colors.oceanDeep,
+    backgroundColor: colors.auth.inputBg,
     borderRadius: borderRadius.large,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
     padding: spacing.lg,
     alignItems: 'center',
     marginBottom: spacing.sm,
   },
   historyPointsLabel: {
+    fontFamily: fonts.barlowCondensedBold,
     fontSize: 11,
-    fontWeight: '700',
-    color: colors.oceanBright,
-    textTransform: 'uppercase',
+    color: colors.auth.neon,
     letterSpacing: 1,
     marginBottom: spacing.xs,
   },
   historyPointsValue: {
+    fontFamily: fonts.barlowCondensedExtraBold,
     fontSize: 56,
-    fontWeight: 'bold',
     color: colors.sand,
   },
   historyPointsNote: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 13,
-    color: colors.textMuted,
-    fontWeight: '600',
+    color: colors.auth.placeholder,
     marginTop: 2,
   },
   historyBenchNote: {
+    fontFamily: fonts.barlowCondensedBold,
     fontSize: 12,
     color: colors.coral,
-    fontWeight: '600',
     marginTop: spacing.sm,
   },
 
-  // ── Swap modal ──
   swapModalHeader: {
     alignItems: 'center',
     marginBottom: spacing.md,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.oceanBright + '20',
+    borderBottomColor: colors.auth.neonSoft,
   },
   swapModalTitle: {
+    fontFamily: fonts.barlowCondensedExtraBold,
     fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.textDark,
+    color: colors.white,
     marginBottom: spacing.xs,
   },
   swapModalSubtitle: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 14,
-    color: colors.textMuted,
+    color: colors.auth.placeholder,
   },
   swapPlayersList: {
     maxHeight: 300,
@@ -1080,11 +1130,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: spacing.md,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: colors.auth.inputBg,
     borderRadius: borderRadius.medium,
     marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.oceanBright + '30',
+    borderWidth: 0.5,
+    borderColor: colors.auth.neonSoft,
   },
   swapPlayerInfo: {
     flexDirection: 'row',
@@ -1095,28 +1145,29 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     marginRight: spacing.md,
-    resizeMode: 'contain',
+    borderRadius: 14,
+    resizeMode: 'cover',
   },
   swapPlayerDetails: {
     flex: 1,
   },
   swapPlayerName: {
+    fontFamily: fonts.barlowCondensedBold,
     fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.textDark,
+    color: colors.white,
     marginBottom: spacing.xs,
   },
   swapPlayerMeta: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.auth.placeholder,
   },
   swapPlayerArrow: {
     fontSize: 20,
-    color: colors.oceanMedium,
+    color: colors.auth.neon,
     fontWeight: 'bold',
   },
 
-  // ── Sub reorder buttons ──
   reorderRow: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -1129,22 +1180,22 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
-    backgroundColor: colors.teal + '25',
-    borderWidth: 2,
-    borderColor: colors.teal,
-    ...shadows.small,
+    backgroundColor: colors.auth.inputBg,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
   },
   reorderButtonDisabled: {
     opacity: 0.35,
   },
   reorderButtonIcon: {
     fontSize: 14,
-    color: colors.teal,
+    color: colors.auth.neon,
     fontWeight: 'bold',
   },
   reorderButtonText: {
+    fontFamily: fonts.barlowCondensedBold,
     fontSize: 13,
-    fontWeight: 'bold',
-    color: colors.teal,
+    color: colors.white,
   },
 });
+

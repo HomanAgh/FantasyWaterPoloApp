@@ -100,8 +100,8 @@ android {
         applicationId "com.fantasywaterpoloapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 3
+        versionName "1.0.0"
     }
     signingConfigs {
         debug {
@@ -119,6 +119,8 @@ android {
     }
     buildTypes {
         debug {
+            applicationIdSuffix ".debug"
+            resValue "string", "app_name", "FWP Dev"
             signingConfig signingConfigs.debug
         }
         release {

@@ -15,8 +15,8 @@ import {
   getSnapshotRoundIds,
   getGwPicksForRound,
   getDeductionForRound,
+  scorePicksWithAutoSub,
 } from '../services/userGwPicksService';
-import { getMultiplePlayersPointsForRound } from '../services/playerRoundPointsService';
 import supabase from '../config/supabaseClient';
 
 export default function GWHistoryScreen({ navigation }) {
@@ -79,19 +79,28 @@ export default function GWHistoryScreen({ navigation }) {
 
     const allPlayerIds = picks.map(p => p.player_id);
 
-    // Batch-fetch player info and GW points
-    const [{ data: pointsMap }, { data: playerRows }] = await Promise.all([
-      getMultiplePlayersPointsForRound(allPlayerIds, roundId),
+    const [{ data: playerRows }, scored] = await Promise.all([
       fetchPlayersByIds(allPlayerIds),
+      scorePicksWithAutoSub(picks, roundId),
     ]);
 
     const playerInfoMap = {};
     (playerRows || []).forEach(p => { playerInfoMap[p.id] = p; });
 
+    const slotByStarter = {};
+    (scored.slots || []).forEach(slot => {
+      slotByStarter[slot.starterId] = slot;
+    });
+    const usedBenchIds = scored.usedBenchIds || new Set();
+
     const enriched = picks.map(pick => {
       const info = playerInfoMap[pick.player_id] || {};
-      const rawPts = pointsMap[pick.player_id] ?? 0;
-      const displayPts = pick.is_captain ? rawPts * 2 : rawPts;
+      const slot = slotByStarter[pick.player_id];
+      const ownRaw = scored.pointsMap?.[pick.player_id] ?? 0;
+      const countedRaw = pick.is_starter ? (slot?.rawPoints ?? 0) : ownRaw;
+      const displayPts = pick.is_captain && pick.is_starter
+        ? countedRaw * 2
+        : countedRaw;
       return {
         playerId: pick.player_id,
         name: info.name || 'Unknown',
@@ -99,8 +108,11 @@ export default function GWHistoryScreen({ navigation }) {
         team: info.teams?.name || '—',
         isStarter: pick.is_starter,
         isCaptain: pick.is_captain,
-        rawPoints: rawPts,
-        displayPoints: displayPts,
+        rawPoints: countedRaw,
+        ownRawPoints: ownRaw,
+        displayPoints: pick.is_starter ? displayPts : ownRaw,
+        wasAutoSub: !!slot?.wasAutoSub,
+        autoSubbedIn: usedBenchIds.has(pick.player_id),
       };
     });
 
@@ -117,10 +129,10 @@ export default function GWHistoryScreen({ navigation }) {
       .sort((a, b) => {
         if (a.position === 'GK' && b.position !== 'GK') return -1;
         if (a.position !== 'GK' && b.position === 'GK') return 1;
-        return b.rawPoints - a.rawPoints;
+        return b.ownRawPoints - a.ownRawPoints;
       });
 
-    const gwScore = starters.reduce((sum, p) => sum + p.displayPoints, 0);
+    const gwScore = scored.total || 0;
     const net = Math.max(0, gwScore - deduction);
 
     setGwData({ starters, bench, gwScore, deduction, net });
@@ -264,6 +276,8 @@ export default function GWHistoryScreen({ navigation }) {
             {/* Legend */}
             <View style={styles.legend}>
               <Text style={styles.legendText}>(C) = Captain — points doubled</Text>
+              <Text style={styles.legendText}>SUB = blank starter replaced by bench</Text>
+              <Text style={styles.legendText}>IN = bench player auto-subbed into XI</Text>
             </View>
           </>
         ) : null}
@@ -295,6 +309,16 @@ function PlayerRow({ player, isStarter }) {
               <Text style={styles.captainText}>C</Text>
             </View>
           )}
+          {player.wasAutoSub && (
+            <View style={styles.autoSubBadge}>
+              <Text style={styles.autoSubText}>SUB</Text>
+            </View>
+          )}
+          {player.autoSubbedIn && (
+            <View style={styles.autoSubBadge}>
+              <Text style={styles.autoSubText}>IN</Text>
+            </View>
+          )}
         </View>
         <Text style={styles.playerTeam}>{player.team}</Text>
       </View>
@@ -302,7 +326,9 @@ function PlayerRow({ player, isStarter }) {
       {/* Points */}
       <View style={styles.pointsContainer}>
         {!isStarter ? (
-          <Text style={styles.benchPoints}>{player.rawPoints} pts</Text>
+          <Text style={styles.benchPoints}>
+            {player.autoSubbedIn ? `${player.ownRawPoints} pts (used)` : `${player.ownRawPoints} pts`}
+          </Text>
         ) : (
           <>
             <Text style={styles.playerPoints}>{player.displayPoints}</Text>
@@ -319,7 +345,7 @@ function PlayerRow({ player, isStarter }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: 'transparent',
   },
   header: {
     backgroundColor: colors.oceanDeep,
@@ -513,6 +539,19 @@ const styles = StyleSheet.create({
   captainText: {
     fontSize: 11,
     fontWeight: '900',
+    color: colors.oceanDeep,
+  },
+  autoSubBadge: {
+    backgroundColor: colors.oceanBright,
+    paddingHorizontal: 6,
+    height: 20,
+    borderRadius: borderRadius.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  autoSubText: {
+    fontSize: 10,
+    fontWeight: '800',
     color: colors.oceanDeep,
   },
   playerTeam: {

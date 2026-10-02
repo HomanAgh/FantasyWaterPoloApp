@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
-import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { useAuth } from '../context/AuthContext';
 import LeaderboardItem from '../components/LeaderboardItem';
 import {
@@ -193,119 +193,127 @@ export default function LeagueDetailScreen({ route, navigation }) {
   const memberCount = userRank?.totalMembers ?? leaderboard.length;
   const showLeaveButton = !isAdmin || memberCount <= 1;
   const leaveLabel =
-    isAdmin && memberCount <= 1 ? 'Delete league' : 'Leave league';
+    isAdmin && memberCount <= 1 ? 'DELETE LEAGUE' : 'LEAVE LEAGUE';
 
   return (
     <ScrollView
       style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor={colors.oceanMedium}
-          colors={[colors.oceanMedium]}
+          tintColor={colors.auth.neon}
+          colors={[colors.auth.neon]}
         />
-      }>
+      }
+    >
+      {/* ── Header ── */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.backButtonText}>‹ BACK</Text>
         </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Image source={Icons.trophy} style={styles.headerEmoji} />
-          <Text style={styles.title}>{leagueName || 'League'}</Text>
-          <Text style={styles.subtitle}>
-            {isAdmin ? 'Private league · Admin' : 'Private league'}
-          </Text>
-        </View>
+        <Text style={styles.title} numberOfLines={2}>
+          {(leagueName || 'League').toUpperCase()}
+        </Text>
+        <Text style={styles.subtitle}>
+          {isAdmin ? 'PRIVATE LEAGUE · ADMIN' : 'PRIVATE LEAGUE'}
+        </Text>
       </View>
 
+      {/* ── Invite Code ── */}
       {inviteCode ? (
-        <View style={[styles.card, styles.codeCard]}>
-          <Text style={styles.codeLabel}>Invite code</Text>
+        <View style={styles.codeCard}>
+          <Text style={styles.codeLabel}>INVITE CODE</Text>
           <Text style={styles.codeValue} selectable>
             {inviteCode}
           </Text>
-          <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-            <Image source={Icons.handshake} style={styles.buttonIcon} />
-            <Text style={styles.shareButtonText}>Share code</Text>
+          <TouchableOpacity
+            style={styles.outlineButton}
+            onPress={handleShare}
+            activeOpacity={0.8}
+          >
+            <Image source={Icons.letter} style={[styles.outlineButtonIcon, styles.iconNeon]} />
+            <Text style={styles.outlineButtonText}>SHARE CODE</Text>
+            <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
         </View>
       ) : null}
 
-      {userRank && userRank.rank && (
-        <View style={[styles.card, styles.yourRankCard]}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Your Rank</Text>
-            <Image source={Icons.goal} style={styles.cardIcon} />
-          </View>
-          <View style={styles.yourRankContent}>
-            <View style={styles.yourRankMain}>
-              <Text style={styles.yourRankNumber}>#{userRank.rank}</Text>
-              <Text style={styles.yourRankPoints}>{userRank.totalPoints} pts</Text>
-            </View>
-            <Text style={styles.yourRankTotal}>
-              of {userRank.totalMembers} managers
-            </Text>
-          </View>
-        </View>
-      )}
-
-      <View style={[styles.card, styles.leaderboardCard]}>
+      {/* ── Standings ── */}
+      <View style={styles.leaderboardCard}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Standings</Text>
-          <Image source={Icons.graph} style={styles.cardIcon} />
+          <Text style={styles.cardTitle}>STANDINGS</Text>
+          <Image source={Icons.trophy} style={[styles.cardHeaderIcon, styles.iconNeon]} />
         </View>
-        <Text style={styles.reportHint}>
-          Long-press a team to report an offensive name
-        </Text>
 
         {loading && !refreshing ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.oceanMedium} />
-            <Text style={styles.loadingText}>Loading standings...</Text>
+            <ActivityIndicator size="large" color={colors.auth.neon} />
+            <Text style={styles.loadingText}>LOADING STANDINGS...</Text>
           </View>
         ) : error ? (
-          <View style={styles.errorContainer}>
-            <Image source={Icons.warning} style={styles.errorEmoji} />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={loadLeagueData}>
-              <Text style={styles.retryButtonText}>Retry</Text>
+          <View style={styles.emptyContainer}>
+            <Image source={Icons.warning} style={styles.emptyIcon} />
+            <Text style={styles.emptyTitle}>{error.toUpperCase()}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={loadLeagueData}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.retryButtonText}>RETRY</Text>
             </TouchableOpacity>
           </View>
         ) : leaderboard.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Image source={Icons.wave} style={styles.emptyEmoji} />
-            <Text style={styles.emptyText}>No members yet</Text>
+            <Image source={Icons.trophy} style={styles.emptyIcon} />
+            <Text style={styles.emptyTitle}>NO MEMBERS YET</Text>
+            <Text style={styles.emptySubtext}>
+              Share the invite code to{'\n'}add managers to this league.
+            </Text>
           </View>
         ) : (
-          leaderboard.map((entry) => (
-            <LeaderboardItem
-              key={entry.user_id}
-              entry={entry}
-              isCurrentUser={entry.user_id === userId}
-              onKick={
-                isAdmin && entry.user_id !== userId
-                  ? () => handleKick(entry)
-                  : undefined
-              }
-              onLongPress={
-                entry.user_id !== userId
-                  ? () => handleReportTeamName(entry)
-                  : undefined
-              }
-            />
-          ))
+          <>
+            <Text style={styles.reportHint}>
+              LONG-PRESS A TEAM TO REPORT AN OFFENSIVE NAME
+            </Text>
+            {leaderboard.map((entry) => (
+              <LeaderboardItem
+                key={entry.user_id}
+                entry={entry}
+                isCurrentUser={entry.user_id === userId}
+                onKick={
+                  isAdmin && entry.user_id !== userId
+                    ? () => handleKick(entry)
+                    : undefined
+                }
+                onLongPress={
+                  entry.user_id !== userId
+                    ? () => handleReportTeamName(entry)
+                    : undefined
+                }
+              />
+            ))}
+          </>
         )}
       </View>
 
+      {/* ── Leave / Admin hint ── */}
       {showLeaveButton ? (
         <View style={styles.actionsWrap}>
           <TouchableOpacity
             style={[styles.leaveButton, actionLoading && styles.leaveButtonDisabled]}
             onPress={handleLeave}
-            disabled={actionLoading}>
+            disabled={actionLoading}
+            activeOpacity={0.8}
+          >
             {actionLoading ? (
-              <ActivityIndicator color={colors.white} />
+              <ActivityIndicator color={colors.coral} />
             ) : (
               <Text style={styles.leaveButtonText}>{leaveLabel}</Text>
             )}
@@ -313,14 +321,13 @@ export default function LeagueDetailScreen({ route, navigation }) {
         </View>
       ) : (
         <View style={styles.adminHintCard}>
+          <Image source={Icons.warning} style={styles.adminHintIcon} />
           <Text style={styles.adminHintText}>
-            As admin you cannot leave while others are in the league. Kick them
-            first, or delete the league once you are the last member.
+            AS ADMIN YOU CANNOT LEAVE WHILE OTHERS ARE IN THE LEAGUE. KICK THEM
+            FIRST, OR DELETE THE LEAGUE ONCE YOU ARE THE LAST MEMBER.
           </Text>
         </View>
       )}
-
-      <View style={styles.bottomSpacer} />
     </ScrollView>
   );
 }
@@ -328,243 +335,247 @@ export default function LeagueDetailScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: 'transparent',
   },
+  scrollContent: {
+    paddingBottom: spacing.xl,
+  },
+
   header: {
-    backgroundColor: colors.oceanDeep,
-    paddingTop: 60,
-    paddingBottom: spacing.lg,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    ...shadows.large,
-  },
-  backButton: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  backButtonText: {
-    color: colors.oceanBright,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  headerContent: {
-    paddingHorizontal: spacing.lg,
+    paddingTop: 56,
+    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
   },
-  headerEmoji: {
-    width: 48,
-    height: 48,
+  backButton: {
+    alignSelf: 'flex-start',
     marginBottom: spacing.sm,
-    resizeMode: 'contain',
+    paddingVertical: spacing.xs,
+  },
+  backButtonText: {
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 14,
+    color: colors.auth.neon,
+    letterSpacing: 1,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 40,
     color: colors.white,
-    marginBottom: spacing.xs,
+    letterSpacing: 1,
     textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    marginBottom: spacing.xs,
   },
   subtitle: {
+    fontFamily: fonts.barlowCondensedMedium,
     fontSize: 16,
-    color: colors.oceanBright,
-    fontWeight: '500',
+    color: colors.white,
+    letterSpacing: 1.5,
+    textAlign: 'center',
+    marginBottom: spacing.md,
   },
-  card: {
-    backgroundColor: colors.pearl,
-    margin: spacing.md,
-    padding: spacing.lg,
-    borderRadius: borderRadius.large,
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.sand + '50',
+
+  iconNeon: {
+    tintColor: colors.auth.neon,
   },
+
   codeCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.coral,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.auth.glass,
+    borderRadius: borderRadius.large,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
     alignItems: 'center',
   },
   codeLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 16,
+    color: colors.auth.statLabel,
     letterSpacing: 1,
     marginBottom: spacing.xs,
   },
   codeValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.oceanDeep,
-    letterSpacing: 4,
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 36,
+    color: colors.sand,
+    letterSpacing: 6,
     marginBottom: spacing.md,
   },
-  shareButton: {
-    backgroundColor: colors.oceanMedium,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.medium,
+
+  outlineButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    ...shadows.small,
+    alignSelf: 'stretch',
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    borderRadius: borderRadius.round,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
   },
-  shareButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  buttonIcon: {
-    width: 18,
-    height: 18,
+  outlineButtonIcon: {
+    width: 20,
+    height: 20,
     resizeMode: 'contain',
+    marginRight: spacing.sm,
   },
-  yourRankCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.sand,
-    backgroundColor: colors.sand + '08',
+  outlineButtonText: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 24,
+    color: colors.white,
+    letterSpacing: 0.5,
   },
+  chevron: {
+    fontSize: 28,
+    color: colors.auth.neon,
+    fontWeight: '300',
+    lineHeight: 28,
+    marginTop: -2,
+  },
+
   leaderboardCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.sand,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.auth.glass,
+    borderRadius: borderRadius.large,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginHorizontal: -spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    marginBottom: spacing.sm,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.auth.neon,
   },
   cardTitle: {
+    fontFamily: fonts.barlowCondensedSemiBold,
     fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.textDark,
+    color: colors.white,
+    letterSpacing: 0.5,
   },
-  reportHint: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: -spacing.sm,
-    marginBottom: spacing.md,
-  },
-  cardIcon: {
-    width: 24,
-    height: 24,
+  cardHeaderIcon: {
+    width: 22,
+    height: 22,
     resizeMode: 'contain',
   },
-  yourRankContent: {
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-  },
-  yourRankMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  yourRankNumber: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.success,
-  },
-  yourRankPoints: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.textDark,
-  },
-  yourRankTotal: {
+  reportHint: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 14,
-    color: colors.textMuted,
-    fontWeight: '500',
+    color: colors.auth.placeholder,
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
   },
+
   loadingContainer: {
-    padding: spacing.xl,
+    paddingVertical: spacing.xl,
     alignItems: 'center',
   },
   loadingText: {
     marginTop: spacing.md,
+    fontFamily: fonts.barlowCondensedMedium,
     fontSize: 14,
-    color: colors.textMuted,
-  },
-  errorContainer: {
-    padding: spacing.xl,
-    alignItems: 'center',
-  },
-  errorEmoji: {
-    width: 48,
-    height: 48,
-    marginBottom: spacing.sm,
-    resizeMode: 'contain',
-  },
-  errorText: {
-    fontSize: 16,
-    color: colors.error,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  retryButton: {
-    backgroundColor: colors.oceanMedium,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.medium,
-  },
-  retryButtonText: {
-    color: colors.white,
-    fontSize: 14,
-    fontWeight: '600',
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
   },
   emptyContainer: {
-    padding: spacing.lg,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
   },
-  emptyEmoji: {
-    width: 48,
-    height: 48,
-    marginBottom: spacing.sm,
+  emptyIcon: {
+    width: 80,
+    height: 80,
     resizeMode: 'contain',
+    marginBottom: spacing.lg,
   },
-  emptyText: {
+  emptyTitle: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 22,
+    color: colors.auth.statLabel,
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  emptySubtext: {
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 16,
-    color: colors.textMuted,
-    fontWeight: '600',
+    color: colors.white,
+    textAlign: 'center',
+    lineHeight: 22,
   },
+  retryButton: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+  },
+  retryButtonText: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 14,
+    color: colors.auth.neon,
+    letterSpacing: 1,
+  },
+
   actionsWrap: {
     marginHorizontal: spacing.md,
     marginTop: spacing.sm,
   },
   leaveButton: {
-    backgroundColor: colors.coral,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 48,
-    ...shadows.small,
+    borderWidth: 0.5,
+    borderColor: colors.coral,
+    backgroundColor: 'rgba(229, 57, 53, 0.15)',
+    marginTop: spacing.xl,
   },
   leaveButtonDisabled: {
     opacity: 0.6,
   },
   leaveButtonText: {
-    color: colors.white,
+    fontFamily: fonts.barlowCondensedExtraBold,
     fontSize: 16,
-    fontWeight: '700',
+    color: colors.coral,
+    letterSpacing: 1,
   },
+
   adminHintCard: {
     marginHorizontal: spacing.md,
     marginTop: spacing.sm,
     padding: spacing.md,
     borderRadius: borderRadius.medium,
-    backgroundColor: colors.pearl,
-    borderWidth: 1,
-    borderColor: colors.sand + '50',
+    backgroundColor: colors.auth.inputBg,
+    borderWidth: 0.5,
+    borderColor: colors.sand,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  adminHintIcon: {
+    width: 18,
+    height: 18,
+    resizeMode: 'contain',
+    tintColor: colors.sand,
+    marginTop: 2,
   },
   adminHintText: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensedRegular,
     fontSize: 13,
-    color: colors.textMuted,
-    textAlign: 'center',
+    color: colors.white,
     lineHeight: 18,
-  },
-  bottomSpacer: {
-    height: spacing.xl,
+    letterSpacing: 0.3,
   },
 });

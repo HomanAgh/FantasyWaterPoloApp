@@ -9,19 +9,23 @@ import {
   Image,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
-import { colors, shadows, borderRadius, spacing } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { fetchPlayers } from '../services/playerService';
 import { fetchFixturesForRound } from '../services/fixtureService';
+import { fetchNextRound, getRoundStatus } from '../services/roundService';
 import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
+
+// Same Figma title export as AuthScreen — drop into assets/images/ then set:
+const AUTH_TITLE = null; // require('../assets/images/auth-title.png')
 
 export default function HomeScreen({ navigation }) {
   const [playerCount, setPlayerCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [gameweekPoints, setGameweekPoints] = useState(0);
   const [upcomingFixtures, setUpcomingFixtures] = useState([]);
+  const [upcomingFixturesRound, setUpcomingFixturesRound] = useState(null);
 
-  // Get team stats from context
   const {
     selectedPlayers,
     remainingBudget,
@@ -31,20 +35,27 @@ export default function HomeScreen({ navigation }) {
     lockedTotalPoints,
     pendingDeductions,
     squadFinalized,
+    isLoading: isTeamLoading,
+    teamLoadError,
+    loadUserTeam,
+    MAX_PLAYERS,
+    MAX_GOALKEEPERS,
+    MAX_OUTFIELD,
   } = useTeam();
 
-  // Get round info from context
   const { currentRound, isLocked, timeToDeadline, formatDeadline } = useRound();
 
-  // Overall total comes directly from the DB (global_leaderboard via get_user_global_rank).
-  // That view already includes all rounds including the current one, so we do NOT
-  // add gameweekPoints on top — that would double-count the current GW.
   const overallTotalPoints = lockedTotalPoints;
 
-  // Calculate team completeness
   const gkCount = selectedPlayers.filter(p => p.position === 'GK').length;
   const outfieldCount = selectedPlayers.filter(p => p.position === 'Outfield').length;
-  const isTeamComplete = selectedPlayers.length === 12 && gkCount === 2 && outfieldCount === 10;
+  const isTeamComplete =
+    selectedPlayers.length === MAX_PLAYERS &&
+    gkCount === MAX_GOALKEEPERS &&
+    outfieldCount === MAX_OUTFIELD;
+  // Don't treat a failed/pending sync as an "incomplete squad" nudge
+  const showIncompleteNudge =
+    !isTeamLoading && !teamLoadError && !isTeamComplete && selectedPlayers.length > 0;
 
   useEffect(() => {
     loadPlayerStats();
@@ -65,11 +76,11 @@ export default function HomeScreen({ navigation }) {
   const loadPlayerStats = async () => {
     setLoading(true);
     const { data, error } = await fetchPlayers();
-    
+
     if (!error && data) {
       setPlayerCount(data.length);
     }
-    
+
     setLoading(false);
   };
 
@@ -81,205 +92,276 @@ export default function HomeScreen({ navigation }) {
 
   const loadUpcomingFixtures = async () => {
     if (!currentRound) return;
-    
+
+    let fixturesRound = currentRound;
+    let upcoming = [];
+
     const { data, error } = await fetchFixturesForRound(currentRound.id);
-    
+
     if (!error && data) {
-      // Filter to only scheduled matches and take first 3
-      const upcoming = data
-        .filter(f => f.status === 'scheduled')
-        .slice(0, 3);
-      setUpcomingFixtures(upcoming);
+      upcoming = data.filter(f => f.status === 'scheduled');
     }
+
+    // Live/completed GW with no remaining scheduled matches → show next GW
+    const status = getRoundStatus(currentRound);
+    if (upcoming.length === 0 && (status === 'active' || status === 'completed')) {
+      const { data: nextRound } = await fetchNextRound(currentRound.round_number);
+      if (nextRound) {
+        const { data: nextFixtures, error: nextError } = await fetchFixturesForRound(nextRound.id);
+        if (!nextError && nextFixtures) {
+          upcoming = nextFixtures.filter(f => f.status === 'scheduled');
+          fixturesRound = nextRound;
+        }
+      }
+    }
+
+    setUpcomingFixtures(upcoming);
+    setUpcomingFixturesRound(fixturesRound);
+  };
+
+  const countdownLabel = () => {
+    if (!timeToDeadline) return null;
+    if (timeToDeadline.days > 0) {
+      return `${timeToDeadline.days}D ${timeToDeadline.hours}H`;
+    }
+    if (timeToDeadline.hours > 0) {
+      return `${timeToDeadline.hours}H ${timeToDeadline.minutes}M`;
+    }
+    return `${timeToDeadline.minutes}M`;
+  };
+
+  const renderHero = () => {
+    if (AUTH_TITLE) {
+      return (
+        <Image source={AUTH_TITLE} style={styles.titleImage} resizeMode="contain" />
+      );
+    }
+
+    return (
+      <View style={styles.heroFallback}>
+        <Text style={styles.appTitle}>FANTASY{'\n'}WATER POLO</Text>
+        <View style={styles.ribbon}>
+          <Text style={styles.ribbonText}>DIVE INTO THE ACTION</Text>
+        </View>
+      </View>
+    );
   };
 
   return (
-    <ScrollView style={styles.container}>
-      {/* Ocean-themed header with gradient effect */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Image source={Icons.wave} style={styles.waveEmoji} />
-          <Text style={styles.title}>Fantasy Water Polo</Text>
-          <Text style={styles.subtitle}>Dive into the action!</Text>
-        </View>
-      </View>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.hero}>{renderHero()}</View>
 
-      {/* Gameweek Banner */}
       {currentRound && (
-        <View style={styles.gameweekBanner}>
-          <View style={styles.gameweekInfo}>
-            <Text style={styles.gameweekLabel}>Gameweek {currentRound.round_number}</Text>
-            {isLocked ? (
-              <View style={styles.deadlineRow}>
-                <Image source={Icons.locked} style={styles.deadlineIcon} />
-                <Text style={styles.deadlineText}>LIVE</Text>
-              </View>
-            ) : (
-              <View style={styles.deadlineRow}>
-                <Image source={Icons.clock} style={styles.deadlineIcon} />
-                <Text style={styles.deadlineText}>Deadline: {formatDeadline(currentRound.deadline)}</Text>
-              </View>
-            )}
-          </View>
+        <View style={styles.gameweekBlock}>
+          <Text style={styles.gameweekLabel}>
+            GAMEWEEK {currentRound.round_number}
+          </Text>
+          {isLocked ? (
+            <View style={styles.deadlineRow}>
+              <Image source={Icons.locked} style={styles.deadlineIcon} />
+              <Text style={styles.deadlineText}>LIVE</Text>
+            </View>
+          ) : (
+            <Text style={styles.deadlineText}>
+              DEADLINE: {formatDeadline(currentRound.deadline)}
+            </Text>
+          )}
           {!isLocked && timeToDeadline && (
-            <View style={styles.countdown}>
-              <Text style={styles.countdownText}>
-                {timeToDeadline.days > 0 
-                  ? `${timeToDeadline.days}d ${timeToDeadline.hours}h`
-                  : timeToDeadline.hours > 0
-                  ? `${timeToDeadline.hours}h ${timeToDeadline.minutes}m`
-                  : `${timeToDeadline.minutes}m`}
-              </Text>
+            <View style={styles.countdownPill}>
+              <Image source={Icons.clock} style={styles.countdownIcon} />
+              <Text style={styles.countdownText}>DEADLINE: {countdownLabel()}</Text>
             </View>
           )}
         </View>
       )}
 
-      {/* Points Summary Card */}
-      <View style={[styles.card, styles.pointsCard]}>
+      {/* Points */}
+      <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Points</Text>
-          <Image source={Icons.water} style={styles.waveIcon} />
+          <Text style={styles.cardTitle}>POINTS</Text>
+          <Image source={Icons.points} style={[styles.cardHeaderIcon, styles.iconNeon]} />
         </View>
 
-        {/* GW points row */}
         <View style={styles.pointsRow}>
           <TouchableOpacity
-            style={styles.pointsBlock}
+            style={styles.pointsCircle}
             onPress={() => navigation.navigate('MyTeam')}
-            activeOpacity={0.7}>
-            <Text style={styles.pointsLabel}>
-              {isLocked ? 'GW Live' : `GW ${currentRound?.round_number || 1}`}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.pointsCircleLabel}>
+              {isLocked ? 'GW LIVE' : `GW${currentRound?.round_number || 1}`}
             </Text>
-            <Text style={styles.pointsValue}>{gameweekPoints}</Text>
+            <Text style={styles.pointsCircleValue}>{gameweekPoints}</Text>
             {pendingDeductions > 0 && (
               <Text style={styles.deductionNote}>-{pendingDeductions} hit</Text>
             )}
-            {isLocked && (
-              <Text style={styles.liveIndicator}>● LIVE</Text>
-            )}
-            <Text style={styles.historyHint}>tap to view team</Text>
+            <Text style={styles.historyHint}>TAP FOR HISTORY</Text>
           </TouchableOpacity>
 
-          <View style={styles.pointsDivider} />
-
-          <View style={styles.pointsBlock}>
-            <Text style={styles.pointsLabel}>Total</Text>
-            <Text style={[styles.pointsValue, styles.pointsValueTotal]}>
+          <View style={[styles.pointsCircle, styles.pointsCircleTotal]}>
+            <Text style={styles.pointsCircleLabel}>TOTAL</Text>
+            <Text style={styles.pointsCircleValue}>
               {squadFinalized ? overallTotalPoints : gameweekPoints}
             </Text>
-            {squadFinalized && (
-              <Text style={styles.pointsSubLabel}>all gameweeks</Text>
-            )}
+            <Text style={[styles.historyHint, styles.historyHintSpacer]}>TAP FOR HISTORY</Text>
           </View>
         </View>
       </View>
 
-      {/* Team Overview Card */}
-      <View style={[styles.card, styles.teamCard]}>
+      {/* Team */}
+      <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>{teamName}</Text>
-          <Image source={Icons.swimmer} style={styles.teamIcon} />
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {(teamName || 'MY TEAM').toUpperCase()}
+          </Text>
+          <Image source={Icons.teambadge} style={[styles.cardHeaderIcon, styles.iconNeon]} />
         </View>
-        {loading ? (
+
+        {loading || isTeamLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={colors.oceanMedium} />
+            <ActivityIndicator size="small" color={colors.auth.neon} />
+            {isTeamLoading && (
+              <Text style={styles.syncText}>Syncing your team…</Text>
+            )}
+          </View>
+        ) : teamLoadError ? (
+          <View style={styles.syncErrorBox}>
+            <Text style={styles.syncErrorText}>{teamLoadError}</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => loadUserTeam()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.retryButtonText}>TRY AGAIN</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <>
-            <Text style={styles.cardSubtext}>
-              {selectedPlayers.length}/12 players selected
+            <Text style={styles.selectionText}>
+              {selectedPlayers.length}/{MAX_PLAYERS} players selected
             </Text>
-            {!isTeamComplete && selectedPlayers.length > 0 && (
-              <View style={styles.warningBox}>
-                <View style={styles.warningRow}>
-                  <Image source={Icons.warning} style={styles.warningIcon} />
-                  <Text style={styles.warningText}>Team incomplete: Need {12 - selectedPlayers.length} more player(s)</Text>
-                </View>
-                {gkCount < 2 && (
-                  <Text style={styles.warningText}>
-                    • Need {2 - gkCount} more goalkeeper(s)
+
+            {showIncompleteNudge && (
+              <View style={styles.nudgeBox}>
+                <Text style={styles.nudgeTitle}>
+                  {selectedPlayers.length < MAX_PLAYERS
+                    ? `Add ${MAX_PLAYERS - selectedPlayers.length} more to complete your squad`
+                    : 'Finish setting your squad'}
+                </Text>
+                {gkCount < MAX_GOALKEEPERS && (
+                  <Text style={styles.nudgeText}>
+                    • Need {MAX_GOALKEEPERS - gkCount} more goalkeeper(s)
                   </Text>
                 )}
-                {outfieldCount < 10 && (
-                  <Text style={styles.warningText}>
-                    • Need {10 - outfieldCount} more field player(s)
+                {outfieldCount < MAX_OUTFIELD && (
+                  <Text style={styles.nudgeText}>
+                    • Need {MAX_OUTFIELD - outfieldCount} more field player(s)
                   </Text>
                 )}
               </View>
             )}
+
             {isTeamComplete && (
               <View style={styles.successBox}>
                 <Text style={styles.successText}>✓ Team is complete!</Text>
               </View>
             )}
-            <View style={styles.budgetInfo}>
-              <Text style={styles.budgetLabel}>Budget Remaining:</Text>
+
+            <View style={styles.budgetBar}>
+              <Text style={styles.budgetLabel}>BUDGET REMAINING:</Text>
               <Text style={styles.budgetAmount}>${remainingBudget.toFixed(1)}M</Text>
             </View>
+
             <Text style={styles.cardInfo}>
-              Spent: ${totalSpent.toFixed(1)}M of $100.0M
-            </Text>
-            <Text style={styles.cardInfo}>
-              {playerCount} players available in database
+              Spent ${totalSpent.toFixed(1)}M of $100.0M. {playerCount} players available in the player pool.
             </Text>
           </>
         )}
+
         <TouchableOpacity
-          style={styles.button}
+          style={styles.outlineButton}
           onPress={() => navigation.navigate('MyTeam')}
-          activeOpacity={0.8}>
-          <Image source={Icons.swimmer} style={styles.actionButtonIcon} />
-          <Text style={styles.buttonText}>View Team</Text>
+          activeOpacity={0.8}
+        >
+          <Image source={Icons.teameye} style={[styles.outlineButtonIcon, styles.iconNeon]} />
+          <Text style={styles.outlineButtonText}>VIEW TEAM</Text>
+          <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Quick Actions with ocean colors */}
-      <View style={[styles.card, styles.quickActionsCard]}>
-        <Text style={styles.cardTitle}>Quick Actions</Text>
+      {/* Quick Actions */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>QUICK ACTIONS</Text>
+          <Image source={Icons.sprint} style={[styles.cardHeaderIcon, styles.iconNeon]} />
+        </View>
+
         <TouchableOpacity
-          style={[styles.actionButton, styles.actionButton1]}
+          style={styles.outlineButton}
           onPress={() => navigation.navigate('Players')}
-          activeOpacity={0.8}>
-          <Image source={Icons.player} style={styles.actionButtonIcon} />
-          <Text style={styles.actionButtonText}>Browse Players</Text>
+          activeOpacity={0.8}
+        >
+          <Image source={Icons.folder} style={[styles.outlineButtonIcon, styles.iconNeon]} />
+          <Text style={styles.outlineButtonText}>BROWSE PLAYERS</Text>
+          <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={[styles.actionButton, styles.actionButton2]}
+          style={styles.outlineButton}
           onPress={() => navigation.navigate('Transfers')}
-          activeOpacity={0.8}>
-          <Image source={Icons.swap} style={styles.actionButtonIcon} />
-          <Text style={styles.actionButtonText}>Make Transfers</Text>
+          activeOpacity={0.8}
+        >
+          <Image source={Icons.swap} style={[styles.outlineButtonIcon, styles.iconNeon]} />
+          <Text style={styles.outlineButtonText}>MAKE TRANSFERS</Text>
+          <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={[styles.actionButton, styles.actionButton3]}
+          style={styles.outlineButton}
           onPress={() => navigation.navigate('Leagues')}
-          activeOpacity={0.8}>
-          <Image source={Icons.trophy} style={styles.actionButtonIcon} />
-          <Text style={styles.actionButtonText}>Join League</Text>
+          activeOpacity={0.8}
+        >
+          <Image source={Icons.join} style={[styles.outlineButtonIcon, styles.iconNeon]} />
+          <Text style={styles.outlineButtonText}>JOIN LEAGUE</Text>
+          <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
       </View>
 
       {/* Upcoming Fixtures */}
-      <View style={[styles.card, styles.fixturesCard]}>
+      <View style={[styles.card, styles.lastCard]}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Upcoming Fixtures</Text>
-          <Image source={Icons.calendar} style={styles.fixtureIcon} />
+          <Text style={styles.cardTitle}>UPCOMING FIXTURES</Text>
+          <Image source={Icons.calendar} style={[styles.cardHeaderIcon, styles.iconNeon]} />
         </View>
+
+        {upcomingFixturesRound &&
+          currentRound &&
+          upcomingFixturesRound.id !== currentRound.id &&
+          upcomingFixtures.length > 0 && (
+            <Text style={styles.fixturesRoundLabel}>
+              GAMEWEEK {upcomingFixturesRound.round_number}
+            </Text>
+          )}
+
         {upcomingFixtures.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No fixtures scheduled</Text>
-            <Text style={styles.emptySubtext}>Check back soon for matches!</Text>
+            <Image source={Icons.bigcalender} style={styles.emptyIcon} />
+            <Text style={styles.emptyText}>NO FIXTURES SCHEDULED</Text>
+            <Text style={styles.emptySubtext}>Check back soon for more matches.</Text>
           </View>
         ) : (
           upcomingFixtures.map((fixture) => (
             <View key={fixture.id} style={styles.fixtureRow}>
               <View style={styles.fixtureTeams}>
-                <Text style={styles.fixtureTeam} numberOfLines={1}>
+                <Text style={[styles.fixtureTeam, styles.fixtureTeamHome]} numberOfLines={1}>
                   {fixture.home_team?.name || 'TBD'}
                 </Text>
                 <Text style={styles.fixtureVs}>vs</Text>
-                <Text style={styles.fixtureTeam} numberOfLines={1}>
+                <Text style={[styles.fixtureTeam, styles.fixtureTeamAway]} numberOfLines={1}>
                   {fixture.away_team?.name || 'TBD'}
                 </Text>
               </View>
@@ -288,7 +370,7 @@ export default function HomeScreen({ navigation }) {
                   month: 'short',
                   day: 'numeric',
                   hour: '2-digit',
-                  minute: '2-digit'
+                  minute: '2-digit',
                 })}
               </Text>
             </View>
@@ -302,300 +384,227 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: 'transparent',
   },
-  header: {
-    backgroundColor: colors.oceanDeep,
-    paddingTop: 60,
-    paddingBottom: 30,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    ...shadows.large,
+  scrollContent: {
+    paddingBottom: spacing.xl,
   },
-  headerContent: {
+  hero: {
+    alignItems: 'center',
+    paddingTop: 52,
     paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  titleImage: {
+    width: '100%',
+    height: 140,
+  },
+  heroFallback: {
     alignItems: 'center',
   },
-  waveEmoji: {
-    width: 48,
-    height: 48,
-    marginBottom: 8,
-    resizeMode: 'contain',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
+  appTitle: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 34,
     color: colors.white,
-    marginBottom: 5,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.oceanBright,
-    fontWeight: '500',
-  },
-  card: {
-    backgroundColor: colors.pearl,
-    margin: spacing.md,
-    padding: spacing.lg,
-    borderRadius: borderRadius.large,
-    ...shadows.medium,
-    borderWidth: 1,
-    borderColor: colors.sand + '50',
-  },
-  pointsCard: {
-    backgroundColor: colors.pearl,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.sand,
-  },
-  teamCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.sand,
-  },
-  fixturesCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.oceanBright,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.textDark,
-  },
-  waveIcon: {
-    width: 24,
-    height: 24,
-    resizeMode: 'contain',
-  },
-  teamIcon: {
-    width: 24,
-    height: 24,
-    resizeMode: 'contain',
-  },
-  fixtureIcon: {
-    width: 24,
-    height: 24,
-    resizeMode: 'contain',
-  },
-  pointsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingVertical: spacing.md,
-  },
-  pointsBlock: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  pointsDivider: {
-    width: 1,
-    height: 64,
-    backgroundColor: colors.oceanBright + '40',
-  },
-  pointsLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-  },
-  pointsSubLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  pointsValue: {
-    fontSize: 52,
-    fontWeight: 'bold',
-    color: colors.sand,
     textAlign: 'center',
+    lineHeight: 38,
+    letterSpacing: 1,
+    textShadowColor: colors.auth.neon,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
-  pointsValueTotal: {
-    color: colors.sand,
-  },
-  deductionNote: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#EF4444',
-    marginTop: 2,
-  },
-  cardSubtext: {
-    fontSize: 16,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  warningBox: {
-    backgroundColor: colors.coral + '18',
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.coral,
-  },
-  warningText: {
-    fontSize: 13,
-    color: colors.coral,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-  },
-  successBox: {
-    backgroundColor: '#D1FAE5',
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: '#6EE7B7',
-    alignItems: 'center',
-  },
-  successText: {
-    fontSize: 14,
-    color: '#065F46',
-    fontWeight: '700',
-  },
-  budgetInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.oceanBright + '20',
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.oceanBright,
-  },
-  budgetLabel: {
-    fontSize: 14,
-    color: colors.oceanDeep,
-    fontWeight: '600',
-  },
-  budgetAmount: {
-    fontSize: 18,
-    color: colors.teal,
-    fontWeight: 'bold',
-  },
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.oceanMedium,
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    marginTop: spacing.md,
-    ...shadows.small,
-  },
-  buttonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
-    letterSpacing: 0.5,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.oceanMedium,
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
+  ribbon: {
     marginTop: spacing.sm,
-    ...shadows.small,
-  },
-  quickActionsCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.coral,
-  },
-  actionButton1: {},
-  actionButton2: {},
-  actionButton3: {},
-  actionButtonIcon: {
-    width: 24,
-    height: 24,
-    marginRight: spacing.sm,
-    resizeMode: 'contain',
-    tintColor: colors.white,
-  },
-  actionButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  emptyContainer: {
-    padding: spacing.lg,
+    backgroundColor: colors.sand,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 6,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    transform: [{ rotate: '-2deg' }],
   },
-  emptyText: {
-    fontSize: 16,
-    color: colors.textMuted,
-    textAlign: 'center',
-    fontStyle: 'italic',
-    marginBottom: spacing.xs,
+  ribbonText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: colors.oceanDeep,
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  loadingContainer: {
-    padding: spacing.md,
+  gameweekBlock: {
     alignItems: 'center',
-  },
-  cardInfo: {
-    fontSize: 14,
-    color: colors.oceanMedium,
-    textAlign: 'center',
-    marginTop: spacing.xs,
-    fontWeight: '600',
-  },
-  gameweekBanner: {
-    backgroundColor: colors.oceanDeep,
     marginHorizontal: spacing.md,
-    marginTop: -15,
     marginBottom: spacing.md,
-    padding: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderWidth: 0.5,
+    borderColor: colors.sand,
     borderRadius: borderRadius.medium,
-    ...shadows.medium,
-    borderWidth: 2,
-    borderColor: colors.oceanBright,
-  },
-  gameweekInfo: {
-    marginBottom: spacing.sm,
   },
   gameweekLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.white,
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 22,
+    color: colors.sand,
+    letterSpacing: 1,
     marginBottom: spacing.xs,
   },
   deadlineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
+    marginBottom: spacing.sm,
   },
   deadlineIcon: {
-    width: 14,
-    height: 14,
+    width: 18,
+    height: 18,
     resizeMode: 'contain',
+    tintColor: colors.white,
   },
   deadlineText: {
-    fontSize: 14,
-    color: colors.oceanBright,
-    fontWeight: '600',
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 18,
+    color: colors.white,
+    letterSpacing: 0.5,
+    marginBottom: spacing.xxs,
+    textAlign: 'center',
+  },
+  countdownPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    alignSelf: 'stretch',
+    marginHorizontal: spacing.md,
+    backgroundColor: colors.auth.inputBg,
+    borderWidth: 0.5,
+    borderColor: colors.sand,
+    borderRadius: borderRadius.medium,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.lg + 4,
+  },
+  countdownIcon: {
+    width: 16,
+    height: 16,
+    resizeMode: 'contain',
+    tintColor: colors.sand,
+  },
+  countdownText: {
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 16,
+    color: colors.sand,
+    letterSpacing: 0.5,
+  },
+  card: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+    backgroundColor: colors.auth.glass,
+    borderRadius: borderRadius.large,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+  },
+  lastCard: {
+    marginBottom: spacing.xl,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    // Bleed to card edges so the divider spans full width
+    marginHorizontal: -spacing.lg,
+    marginTop: -spacing.lg,
+    paddingHorizontal: spacing.lg,
+    // Equal space above text/icon and below (to the divider)
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    marginBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.auth.neon,
+  },
+  cardTitle: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 20,
+    color: colors.white,
+    letterSpacing: 1,
+    marginRight: spacing.sm,
+  },
+  cardHeaderIcon: {
+    width: 22,
+    height: 22,
+    resizeMode: 'contain',
+  },
+  iconNeon: {
+    tintColor: colors.auth.neon,
+  },
+  pointsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  pointsCircle: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 3.5,
+    borderColor: colors.auth.neon,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.sm,
+  },
+  // Fine-tune TOTAL label/number — raise paddingTop / lower paddingBottom to move content down
+  pointsCircleTotal: {
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  pointsCircleLabel: {
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 12,
+    color: colors.auth.neon,
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  pointsCircleValue: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 56,
+    color: colors.white,
+    lineHeight: 46,
+  },
+  deductionNote: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 11,
+    color: colors.coral,
+    marginTop: 2,
+  },
+  historyHint: {
+    fontFamily: fonts.barlowCondensedMedium,
+    fontSize: 12,
+    color: colors.auth.neon,
+    letterSpacing: 0.5,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  historyHintSpacer: {
+    opacity: 0,
+  },
+  selectionText: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 24,
+    color: colors.sand,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  warningBox: {
+    backgroundColor: colors.coral + '22',
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    marginBottom: spacing.md,
+    borderWidth: 0.5,
+    borderColor: colors.coral,
   },
   warningRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
     marginBottom: spacing.xs,
   },
   warningIcon: {
@@ -603,43 +612,187 @@ const styles = StyleSheet.create({
     height: 14,
     resizeMode: 'contain',
   },
-  countdown: {
-    backgroundColor: colors.oceanBright + '30',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.medium,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.oceanBright,
-  },
-  countdownText: {
-    fontSize: 20,
-    fontWeight: 'bold',
+  warningText: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 13,
     color: colors.white,
+  },
+  nudgeBox: {
+    backgroundColor: colors.auth.inputBg,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    marginBottom: spacing.md,
+    borderWidth: 0.5,
+    borderColor: colors.sand,
+  },
+  nudgeTitle: {
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 14,
+    color: colors.sand,
+    marginBottom: spacing.xs,
+  },
+  nudgeText: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 13,
+    color: colors.white,
+  },
+  syncText: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 13,
+    color: colors.auth.placeholder,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
+  syncErrorBox: {
+    backgroundColor: colors.auth.inputBg,
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    marginBottom: spacing.md,
+    borderWidth: 0.5,
+    borderColor: colors.coral,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  syncErrorText: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 14,
+    color: colors.white,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+  },
+  retryButtonText: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 14,
+    color: colors.auth.neon,
     letterSpacing: 1,
   },
-  liveIndicator: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.coral,
-    marginTop: spacing.sm,
-    letterSpacing: 2,
+  successBox: {
+    backgroundColor: 'rgba(46, 204, 113, 0.15)',
+    padding: spacing.md,
+    borderRadius: borderRadius.medium,
+    marginBottom: spacing.md,
+    borderWidth: 0.5,
+    borderColor: colors.success,
+    alignItems: 'center',
   },
-  historyHint: {
-    fontSize: 10,
-    color: colors.oceanBright,
-    fontWeight: '600',
-    marginTop: spacing.xs,
-    letterSpacing: 0.3,
+  successText: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 14,
+    color: colors.success,
+  },
+  budgetBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.auth.inputBg,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.small,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neonSoft,
+    marginBottom: spacing.sm,
+  },
+  budgetLabel: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 16,
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+  budgetAmount: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 18,
+    color: colors.sand,
+  },
+  cardInfo: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 16,
+    color: colors.white,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+    lineHeight: 18,
+  },
+  outlineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    borderRadius: borderRadius.round,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
+  },
+  outlineButtonIcon: {
+    width: 20,
+    height: 20,
+    resizeMode: 'contain',
+    marginRight: spacing.sm,
+  },
+  outlineButtonText: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 24,
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+  chevron: {
+    fontSize: 28,
+    color: colors.auth.neon,
+    fontWeight: '300',
+    lineHeight: 28,
+    marginTop: -2,
+  },
+  fixturesRoundLabel: {
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 14,
+    color: colors.sand,
+    letterSpacing: 1,
+    marginBottom: spacing.sm,
+  },
+  emptyContainer: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    resizeMode: 'contain',
+    marginBottom: spacing.lg,
+    
+    marginBottom: spacing.md,
+    opacity: 0.9,
+  },
+  emptyText: {
+    fontFamily: fonts.barlowCondensedExtraBold,
+    fontSize: 24,
+    color: '#7CB2FF',
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  emptySubtext: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 18,
+    color: colors.white,
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    padding: spacing.md,
+    alignItems: 'center',
   },
   fixtureRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.oceanBright + '20',
+    borderBottomColor: colors.auth.neonSoft,
   },
   fixtureTeams: {
     flex: 1,
@@ -648,22 +801,30 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   fixtureTeam: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textDark,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 18,
+    color: colors.white,
     flex: 1,
   },
+  fixtureTeamHome: {
+    textAlign: 'right',
+  },
+  fixtureTeamAway: {
+    textAlign: 'left',
+  },
   fixtureVs: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: '500',
-    paddingHorizontal: spacing.xs,
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 14,
+    color: colors.auth.placeholder,
+    textAlign: 'center',
+    minWidth: 28,
+    flexShrink: 0,
+    lineHeight: 18,
   },
   fixtureDate: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: '500',
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 16,
+    color: colors.auth.placeholder,
     marginLeft: spacing.sm,
   },
 });
-
