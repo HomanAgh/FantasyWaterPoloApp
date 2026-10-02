@@ -26,6 +26,10 @@
         "projectId": "3f7b6944-c87b-4fc5-88fd-ecb938571088"
       }
     },
-    "owner": "homanagh"
+    "owner": "homanagh",
+    "plugins": [
+      "expo-font",
+      "expo-asset"
+    ]
   }
 }

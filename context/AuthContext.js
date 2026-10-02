@@ -66,11 +66,20 @@ export const AuthProvider = ({ children }) => {
     return { error };
   };
 
+  const resetPassword = async (email) => {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: 'https://auth.fantasy-water-polo.com',
+    });
+    return { data, error };
+  };
+
   // userId is the Supabase auth UUID stored as a string — matches user_id TEXT in DB
   const userId = session?.user?.id ?? null;
 
   return (
-    <AuthContext.Provider value={{ session, userId, isLoadingAuth, signUp, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{ session, userId, isLoadingAuth, signUp, signIn, signOut, resetPassword }}
+    >
       {children}
     </AuthContext.Provider>
   );
