@@ -14,6 +14,7 @@ import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
 import PitchView from '../components/PitchView';
+import { startReplaceSession } from '../utils/transferReplaceSession';
 
 export default function TransfersScreen({ navigation }) {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
@@ -30,7 +31,6 @@ export default function TransfersScreen({ navigation }) {
     STARTING_BUDGET,
     freeTransfers,
     transfersMadeThisRound,
-    pendingDeductions,
     isUnlimitedPhase,
     MAX_PLAYERS,
     MAX_OUTFIELD,
@@ -55,10 +55,17 @@ export default function TransfersScreen({ navigation }) {
 
   const handleReplacePlayer = () => {
     setModalVisible(false);
+    const replaceToken = Date.now();
+    startReplaceSession({
+      replacingPlayer: selectedPlayer,
+      filterPosition: selectedPlayer.position,
+      replaceToken,
+    });
     navigation.navigate('Players', {
       replacingPlayer: selectedPlayer,
       filterPosition: selectedPlayer.position,
       mode: 'replace',
+      replaceToken,
     });
     setSelectedPlayer(null);
   };
@@ -83,9 +90,11 @@ export default function TransfersScreen({ navigation }) {
   };
 
   const handleViewStats = () => {
+    if (!selectedPlayer) return;
+    const player = selectedPlayer;
     setModalVisible(false);
-    Alert.alert('Coming Soon', 'Player statistics view will be available in a future update.');
     setSelectedPlayer(null);
+    navigation.navigate('PlayerDetail', { playerId: player.id, player });
   };
 
   const handleCloseModal = () => {
@@ -94,21 +103,21 @@ export default function TransfersScreen({ navigation }) {
   };
 
   const getDeadlineText = () => {
-    if (!currentRound) return 'NO ACTIVE ROUND';
-    if (isLocked) return `GAMEWEEK ${currentRound.round_number} — LIVE`;
+    if (!currentRound) return 'NO ROUND';
+    if (isLocked) return `GW${currentRound.round_number} LIVE`;
     if (timeToDeadline) {
       const { days, hours, minutes } = timeToDeadline;
-      if (days > 0) return `DEADLINE: ${days}D ${hours}H`;
-      if (hours > 0) return `DEADLINE: ${hours}H ${minutes}M`;
-      return `DEADLINE: ${minutes}M`;
+      if (days > 0) return `${days}D ${hours}H`;
+      if (hours > 0) return `${hours}H ${minutes}M`;
+      return `${minutes}M`;
     }
-    return formatDeadline ? formatDeadline(currentRound.deadline) : 'DEADLINE PASSED';
+    return formatDeadline ? formatDeadline(currentRound.deadline) : 'PASSED';
   };
 
   const getFreeTransfersText = () => {
-    if (isUnlimitedPhase) return 'Free transfers: Unlimited (Pre-GW1)';
-    const maxNote = freeTransfers === 2 ? '(Max)' : '';
-    return `Free transfers: ${freeTransfers}${maxNote}, additional transfers cost -4`;
+    if (isUnlimitedPhase) return 'Unlimited';
+    const maxNote = freeTransfers === 2 ? ' (Max)' : '';
+    return `${freeTransfers} FREE TRANSFERS${maxNote}`;
   };
 
   return (
@@ -138,41 +147,40 @@ export default function TransfersScreen({ navigation }) {
             </View>
           </View>
 
-          <View
-            style={[
-              styles.infoBadge,
-              styles.transferInfoBadge,
-              !isUnlimitedPhase && freeTransfers === 0 && styles.transferInfoWarning,
-            ]}
-          >
-            <Image source={Icons.swap} style={styles.transferInfoIcon} />
-            <Text style={styles.transferInfoText}>{getFreeTransfersText()}</Text>
-          </View>
-
-          {!isUnlimitedPhase && transfersMadeThisRound > 0 && (
-            <View style={[styles.infoBadge, styles.transfersMadeBadge]}>
-              <Text style={styles.transfersMadeText}>
-                {transfersMadeThisRound} MADE THIS GW
+          <View style={styles.infoRow}>
+            <View
+              style={[
+                styles.infoBadge,
+                styles.transferInfoBadge,
+                !isUnlimitedPhase && freeTransfers === 0 && styles.transferInfoWarning,
+              ]}
+            >
+              <Text style={styles.transferInfoText} numberOfLines={2}>
+                {getFreeTransfersText()}
               </Text>
             </View>
-          )}
 
-          {pendingDeductions > 0 && (
-            <View style={[styles.infoBadge, styles.deductionBadge]}>
-              <Image source={Icons.warning} style={styles.deductionIcon} />
-              <Text style={styles.deductionText}>-{pendingDeductions} PTS HIT THIS GW</Text>
-            </View>
-          )}
+            {!isUnlimitedPhase && transfersMadeThisRound > 0 && (
+              <View style={[styles.infoBadge, styles.transfersMadeBadge]}>
+                <Text style={styles.transfersMadeText} numberOfLines={2}>
+                  {transfersMadeThisRound} MADE THIS GW
+                </Text>
+              </View>
+            )}
 
-          {currentRound && (
-            <View style={[styles.infoBadge, styles.deadlineBadge]}>
-              <Image
-                source={isLocked ? Icons.locked : Icons.clock}
-                style={styles.deadlineIcon}
-              />
-              <Text style={styles.deadlineText}>{getDeadlineText()}</Text>
-            </View>
-          )}
+            {currentRound && (
+              <View style={[styles.infoBadge, styles.deadlineBadge]}>
+                <Image
+                  source={isLocked ? Icons.locked : Icons.clock}
+                  style={styles.deadlineIcon}
+                />
+                <Text style={styles.deadlineText} numberOfLines={2}>
+                  {getDeadlineText()}
+                </Text>
+              </View>
+            )}
+          </View>
+
         </View>
       </View>
 
@@ -202,6 +210,15 @@ export default function TransfersScreen({ navigation }) {
               {outfieldCount < MAX_OUTFIELD && `Need ${MAX_OUTFIELD - outfieldCount} more Outfield`}
             </Text>
           </View>
+        </View>
+      )}
+
+      {/* ── Transfer hint ── */}
+      {!isLocked && selectedPlayers.length > 0 && (
+        <View style={styles.hintBanner}>
+          <Text style={styles.hintText}>
+            Hint: press the player you want to transfer out
+          </Text>
         </View>
       )}
 
@@ -290,19 +307,15 @@ export default function TransfersScreen({ navigation }) {
                       }
                       style={styles.modalPlayerEmoji}
                     />
-                    <View style={styles.modalPlayerDetails}>
+                    <View>
                       <Text style={styles.modalPlayerName}>{selectedPlayer.name}</Text>
-                      <Text style={styles.modalPlayerSubtext}>
+                      <Text style={styles.modalPlayerDetails}>
                         {selectedPlayer.team} • {selectedPlayer.position}
+                        {selectedPlayer.price
+                          ? ` • $${selectedPlayer.price.toFixed(1)}M`
+                          : ''}
+                        {` • ${selectedPlayer.points ?? 0} pts`}
                       </Text>
-                      <View style={styles.modalPlayerPriceContainer}>
-                        <Text style={styles.modalPlayerPrice}>
-                          ${selectedPlayer.price.toFixed(1)}M
-                        </Text>
-                        <Text style={styles.modalPlayerPoints}>
-                          {selectedPlayer.points} pts
-                        </Text>
-                      </View>
                     </View>
                   </View>
                   {selectedPlayer.id === captainId && (
@@ -319,15 +332,7 @@ export default function TransfersScreen({ navigation }) {
                     activeOpacity={0.8}
                   >
                     <Image source={Icons.swap} style={styles.modalButtonIcon} />
-                    <View style={styles.modalButtonTextContainer}>
-                      <Text style={styles.modalButtonText}>REPLACE PLAYER</Text>
-                      <Text style={styles.modalButtonSubtext}>
-                        Find{' '}
-                        {selectedPlayer.position === 'GK'
-                          ? 'another goalkeeper'
-                          : 'another field player'}
-                      </Text>
-                    </View>
+                    <Text style={styles.modalButtonText}>Replace player</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -336,12 +341,7 @@ export default function TransfersScreen({ navigation }) {
                     activeOpacity={0.8}
                   >
                     <Image source={Icons.graph} style={styles.modalButtonIcon} />
-                    <View style={styles.modalButtonTextContainer}>
-                      <Text style={styles.modalButtonText}>VIEW STATS</Text>
-                      <Text style={styles.modalButtonSubtext}>
-                        Performance and history
-                      </Text>
-                    </View>
+                    <Text style={styles.modalButtonText}>View stats</Text>
                   </TouchableOpacity>
 
                   {isUnlimitedPhase && (
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.auth.glass,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.md + 4,
+    paddingVertical: spacing.xs,
     borderRadius: borderRadius.medium,
     borderWidth: 0.5,
     borderColor: colors.auth.neon,
@@ -434,18 +434,25 @@ const styles = StyleSheet.create({
     color: colors.auth.statValue,
   },
 
-  infoBadge: {
+  infoRow: {
     flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+    width: '100%',
+  },
+  infoBadge: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 64,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    width: '100%',
+    gap: 4,
     borderWidth: 0.5,
     backgroundColor: colors.auth.inputBg,
     borderRadius: borderRadius.medium,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.lg + 4,
-    marginBottom: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xs,
   },
   transferInfoBadge: {
     borderColor: colors.auth.neon,
@@ -453,45 +460,27 @@ const styles = StyleSheet.create({
   transferInfoWarning: {
     borderColor: colors.warning,
   },
-  transferInfoIcon: {
-    width: 16,
-    height: 16,
-    resizeMode: 'contain',
-    tintColor: colors.auth.neon,
-  },
   transferInfoText: {
     fontFamily: fonts.barlowCondensedSemiBold,
     fontSize: 18,
     color: colors.white,
     letterSpacing: 0.3,
+    textAlign: 'center',
   },
   transfersMadeBadge: {
     borderColor: colors.auth.neonSoft,
   },
   transfersMadeText: {
     fontFamily: fonts.barlowCondensedSemiBold,
-    fontSize: 13,
+    fontSize: 18,
     color: colors.white,
     letterSpacing: 0.5,
-  },
-  deductionBadge: {
-    borderColor: colors.coral,
-  },
-  deductionIcon: {
-    width: 16,
-    height: 16,
-    resizeMode: 'contain',
-  },
-  deductionText: {
-    fontFamily: fonts.barlowCondensedBold,
-    fontSize: 14,
-    color: colors.coral,
-    letterSpacing: 0.5,
+    textAlign: 'center',
   },
   deadlineBadge: {
+    flexDirection: 'row',
+    gap: 6,
     borderColor: colors.sand,
-    marginTop: spacing.xs,
-    marginBottom: 0,
   },
   deadlineIcon: {
     width: 16,
@@ -501,9 +490,10 @@ const styles = StyleSheet.create({
   },
   deadlineText: {
     fontFamily: fonts.barlowCondensedSemiBold,
-    fontSize: 16,
+    fontSize: 18,
     color: colors.sand,
     letterSpacing: 0.5,
+    textAlign: 'center',
   },
 
   lockedBanner: {
@@ -536,6 +526,26 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlowCondensedRegular,
     fontSize: 16,
     color: colors.white,
+  },
+
+  hintBanner: {
+    backgroundColor: colors.auth.inputBg,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neonSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hintText: {
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 14,
+    color: colors.white,
+    letterSpacing: 0.3,
+    textAlign: 'center',
   },
 
   statusBanner: {
@@ -686,34 +696,16 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: colors.auth.neon,
   },
-  modalPlayerDetails: {
-    flex: 1,
-  },
   modalPlayerName: {
     fontFamily: fonts.barlowCondensedExtraBold,
-    fontSize: 20,
+    fontSize: 24,
     color: colors.white,
-    marginBottom: 2,
-  },
-  modalPlayerSubtext: {
-    fontFamily: fonts.barlowCondensedRegular,
-    fontSize: 13,
-    color: colors.auth.placeholder,
     marginBottom: 4,
   },
-  modalPlayerPriceContainer: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  modalPlayerPrice: {
-    fontFamily: fonts.barlowCondensedBold,
-    fontSize: 14,
-    color: colors.sand,
-  },
-  modalPlayerPoints: {
-    fontFamily: fonts.barlowCondensedBold,
-    fontSize: 14,
-    color: colors.auth.neon,
+  modalPlayerDetails: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 16,
+    color: colors.auth.placeholder,
   },
   modalCaptainBadge: {
     backgroundColor: colors.sand,
@@ -766,15 +758,9 @@ const styles = StyleSheet.create({
   },
   modalButtonText: {
     fontFamily: fonts.barlowCondensedBold,
-    fontSize: 15,
+    fontSize: 20,
     color: colors.white,
     letterSpacing: 0.5,
-  },
-  modalButtonSubtext: {
-    fontFamily: fonts.barlowCondensedRegular,
-    fontSize: 12,
-    color: colors.auth.placeholder,
-    marginTop: 2,
   },
   modalButtonTextDanger: {
     fontFamily: fonts.barlowCondensedBold,

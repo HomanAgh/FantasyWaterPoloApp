@@ -126,9 +126,9 @@ WHERE id = 'fixture-uuid';
 ```sql
 INSERT INTO player_match_stats
   (fixture_id, player_id, goals, assists, saves, penalty_saves,
-   appeared, red_cards, clean_sheets, blocks, sprints, fouls_drawn)
+   appeared, red_cards, clean_sheets, blocks, sprints, steals, fouls_drawn)
 VALUES
-  ('fixture-uuid', 'player-uuid', 2, 1, 0, 0, true, 0, 0, 0, 0, 0)
+  ('fixture-uuid', 'player-uuid', 2, 1, 0, 0, true, 0, 0, 0, 0, 0, 0)
 ON CONFLICT (fixture_id, player_id)
 DO UPDATE SET
   goals          = EXCLUDED.goals,
@@ -140,6 +140,7 @@ DO UPDATE SET
   clean_sheets   = EXCLUDED.clean_sheets,
   blocks         = EXCLUDED.blocks,
   sprints        = EXCLUDED.sprints,
+  steals         = EXCLUDED.steals,
   fouls_drawn    = EXCLUDED.fouls_drawn;
 ```
 
@@ -147,7 +148,7 @@ DO UPDATE SET
 
 **Re-running the query is safe**: the `ON CONFLICT` clause means running it again with updated values will overwrite the previous entry for that player/fixture combination.
 
-#### Scoring Rules (as of migration 019)
+#### Scoring Rules (as of migration 021)
 
 **Outfield**
 
@@ -158,6 +159,7 @@ DO UPDATE SET
 | Appearance (`appeared = true`) | +1 pt |
 | Block | +2 pts each |
 | Sprint | +2 pts each |
+| Steal | +2 pts each |
 | Personal foul drawn | +2 pts each |
 | Clean sheet period | +1 pt per period |
 | Red card | -10 pts each |
@@ -178,7 +180,7 @@ DO UPDATE SET
 **Tips**:
 - `clean_sheets` is an integer representing how many periods had no goals conceded (0–4)
 - `appeared` should be `true` if the player played, `false` if they did not
-- Outfield do not score for saves/penalty saves; GKs do not score for blocks/sprints
+- Outfield do not score for saves/penalty saves; GKs do not score for blocks/sprints/steals
 - Add stats for all players who appeared — the app shows the top 3 performers sorted by points automatically
 
 ## Database Schema Reference
@@ -211,6 +213,7 @@ DO UPDATE SET
 | appeared | BOOLEAN | Whether the player played at all |
 | blocks | INTEGER | Blocks made |
 | sprints | INTEGER | Sprints made |
+| steals | INTEGER | Steals made (outfield scoring only) |
 | fouls_drawn | INTEGER | Personal fouls drawn |
 | clean_sheets | INTEGER | Number of periods with no goals conceded (0–4) |
 | red_cards | INTEGER | Red cards received |

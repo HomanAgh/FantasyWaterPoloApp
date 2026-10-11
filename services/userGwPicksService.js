@@ -206,3 +206,61 @@ export const calculateTotalLockedPoints = async (userId) => {
     return 0;
   }
 };
+
+/**
+ * Public (any authenticated user) read of another manager's snapshot round IDs.
+ * Uses SECURITY DEFINER RPC — bypasses RLS on user_gw_picks.
+ */
+export const getPublicSnapshotRoundIds = async (targetUserId) => {
+  try {
+    const { data, error } = await supabase.rpc('get_user_snapshot_rounds', {
+      target_user_id: targetUserId,
+    });
+
+    if (error) throw error;
+
+    const roundIds = [...new Set((data || []).map(r => r.round_id))];
+    return { data: roundIds, error: null };
+  } catch (error) {
+    console.error('Error fetching public snapshot round IDs:', error);
+    return { data: [], error };
+  }
+};
+
+/**
+ * Public read of another manager's locked GW picks for a round.
+ */
+export const getPublicGwPicksForRound = async (targetUserId, roundId) => {
+  try {
+    const { data, error } = await supabase.rpc('get_user_gw_picks_for_round', {
+      target_user_id: targetUserId,
+      target_round_id: roundId,
+    });
+
+    if (error) throw error;
+
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Error fetching public GW picks:', error);
+    return { data: [], error };
+  }
+};
+
+/**
+ * Public read of another manager's transfer deduction for a round.
+ */
+export const getPublicDeductionForRound = async (targetUserId, roundId) => {
+  try {
+    const { data, error } = await supabase.rpc('get_user_round_deduction', {
+      target_user_id: targetUserId,
+      target_round_id: roundId,
+    });
+
+    if (error) throw error;
+
+    return typeof data === 'number' ? data : 0;
+  } catch (error) {
+    console.error('Error fetching public deduction:', error);
+    return 0;
+  }
+};

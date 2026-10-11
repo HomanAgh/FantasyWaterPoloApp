@@ -23,7 +23,7 @@ const styles = StyleSheet.create({
   },
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(2, 1, 12, 0.6)',
+    backgroundColor: 'rgba(32, 19, 221, 0)',
   },
   content: {
     flex: 1,

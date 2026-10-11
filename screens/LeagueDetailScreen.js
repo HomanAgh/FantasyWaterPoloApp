@@ -23,6 +23,8 @@ import {
 } from '../services/leagueService';
 import { reportTeamName } from '../services/userProfileService';
 
+const PAGE_SIZE = 50;
+
 export default function LeagueDetailScreen({ route, navigation }) {
   const { leagueId, leagueName, inviteCode, createdBy } = route.params;
   const { userId } = useAuth();
@@ -33,6 +35,8 @@ export default function LeagueDetailScreen({ route, navigation }) {
   const [userRank, setUserRank] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -41,7 +45,7 @@ export default function LeagueDetailScreen({ route, navigation }) {
 
     try {
       const [leaderboardResult, rankResult] = await Promise.all([
-        fetchLeagueLeaderboard(leagueId, 50),
+        fetchLeagueLeaderboard(leagueId, PAGE_SIZE, 0),
         getUserLeagueRank(leagueId),
       ]);
 
@@ -53,7 +57,14 @@ export default function LeagueDetailScreen({ route, navigation }) {
         console.warn('Error fetching league rank:', rankResult.error);
       }
 
-      setLeaderboard(leaderboardResult.data || []);
+      const rows = leaderboardResult.data || [];
+      setLeaderboard(rows);
+      const totalMembers = rankResult?.totalMembers;
+      setHasMore(
+        typeof totalMembers === 'number'
+          ? rows.length < totalMembers
+          : rows.length >= PAGE_SIZE
+      );
       setUserRank(rankResult);
     } catch (err) {
       console.error('Error loading league:', err);
@@ -63,6 +74,39 @@ export default function LeagueDetailScreen({ route, navigation }) {
       setRefreshing(false);
     }
   }, [leagueId]);
+
+  const loadMoreLeaderboard = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+
+    setLoadingMore(true);
+    try {
+      const { data, error: moreError } = await fetchLeagueLeaderboard(
+        leagueId,
+        PAGE_SIZE,
+        leaderboard.length
+      );
+
+      if (moreError) throw moreError;
+
+      const rows = data || [];
+      const seen = new Set(leaderboard.map(e => e.user_id));
+      const unique = rows.filter(e => !seen.has(e.user_id));
+      const next = [...leaderboard, ...unique];
+      setLeaderboard(next);
+
+      const totalMembers = userRank?.totalMembers;
+      setHasMore(
+        typeof totalMembers === 'number'
+          ? next.length < totalMembers
+          : rows.length >= PAGE_SIZE
+      );
+    } catch (err) {
+      console.error('Error loading more league standings:', err);
+      Alert.alert("Couldn't load more", 'Please try again.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, leagueId, leaderboard, userRank?.totalMembers]);
 
   useEffect(() => {
     loadLeagueData();
@@ -161,6 +205,14 @@ export default function LeagueDetailScreen({ route, navigation }) {
         },
       ]
     );
+  };
+
+  const openViewTeam = (entry) => {
+    if (!entry?.user_id) return;
+    navigation.navigate('ViewTeam', {
+      userId: entry.user_id,
+      teamName: entry.team_name,
+    });
   };
 
   const handleReportTeamName = (entry) => {
@@ -280,13 +332,14 @@ export default function LeagueDetailScreen({ route, navigation }) {
         ) : (
           <>
             <Text style={styles.reportHint}>
-              LONG-PRESS A TEAM TO REPORT AN OFFENSIVE NAME
+              TAP VIEW TO SEE THEIR TEAM · LONG-PRESS TO REPORT
             </Text>
             {leaderboard.map((entry) => (
               <LeaderboardItem
                 key={entry.user_id}
                 entry={entry}
                 isCurrentUser={entry.user_id === userId}
+                onViewTeam={() => openViewTeam(entry)}
                 onKick={
                   isAdmin && entry.user_id !== userId
                     ? () => handleKick(entry)
@@ -299,6 +352,20 @@ export default function LeagueDetailScreen({ route, navigation }) {
                 }
               />
             ))}
+            {hasMore ? (
+              <TouchableOpacity
+                style={[styles.loadMoreButton, loadingMore && styles.loadMoreButtonDisabled]}
+                onPress={loadMoreLeaderboard}
+                disabled={loadingMore}
+                activeOpacity={0.8}
+              >
+                {loadingMore ? (
+                  <ActivityIndicator color={colors.auth.neon} />
+                ) : (
+                  <Text style={styles.loadMoreButtonText}>SHOW MORE</Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
           </>
         )}
       </View>
@@ -472,6 +539,26 @@ const styles = StyleSheet.create({
     color: colors.auth.placeholder,
     letterSpacing: 0.5,
     marginBottom: spacing.sm,
+  },
+  loadMoreButton: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    backgroundColor: 'rgba(0, 174, 239, 0.08)',
+    minHeight: 44,
+  },
+  loadMoreButtonDisabled: {
+    opacity: 0.7,
+  },
+  loadMoreButtonText: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 14,
+    color: colors.auth.neon,
+    letterSpacing: 1,
   },
 
   loadingContainer: {

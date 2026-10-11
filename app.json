@@ -4,7 +4,7 @@
   "expo": {
     "name": "Fantasy Water Polo",
     "slug": "fantasy-water-polo",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "com.fantasywaterpolo.app",
-      "versionCode": 3
+      "versionCode": 4
     },
     "extra": {
       "eas": {

@@ -193,7 +193,7 @@ export const fetchPlayerDetail = async (playerId) => {
       .from('player_match_stats')
       .select(`
         goals, assists, saves, penalty_saves, points_earned,
-        red_cards, clean_sheets, blocks, sprints, fouls_drawn,
+        red_cards, clean_sheets, blocks, sprints, steals, fouls_drawn,
         fixtures (
           id, match_date, status, home_score, away_score,
           home_team:home_team_id (id, name),
@@ -216,6 +216,7 @@ export const fetchPlayerDetail = async (playerId) => {
     const totalCleanSheets = stats.reduce((s, r) => s + (r.clean_sheets || 0), 0);
     const totalBlocks = stats.reduce((s, r) => s + (r.blocks || 0), 0);
     const totalSprints = stats.reduce((s, r) => s + (r.sprints || 0), 0);
+    const totalSteals = stats.reduce((s, r) => s + (r.steals || 0), 0);
     const totalFoulsDrawn = stats.reduce((s, r) => s + (r.fouls_drawn || 0), 0);
     const pointsPerGame = gamesPlayed > 0
       ? (playerRow.points_total / gamesPlayed).toFixed(1)
@@ -231,6 +232,7 @@ export const fetchPlayerDetail = async (playerId) => {
       cleanSheets: r.clean_sheets || 0,
       blocks: r.blocks || 0,
       sprints: r.sprints || 0,
+      steals: r.steals || 0,
       foulsDrawn: r.fouls_drawn || 0,
       pointsEarned: r.points_earned,
       fixture: r.fixtures,
@@ -269,6 +271,7 @@ export const fetchPlayerDetail = async (playerId) => {
         totalCleanSheets,
         totalBlocks,
         totalSprints,
+        totalSteals,
         totalFoulsDrawn,
         pointsPerGame,
         recentMatches,
@@ -383,6 +386,7 @@ export const searchAndFilterPlayersWithStats = async (query, position, teamId = 
       penaltySaves: Number(p.total_penalty_saves) || 0,
       blocks: Number(p.total_blocks) || 0,
       sprints: Number(p.total_sprints) || 0,
+      steals: Number(p.total_steals) || 0,
       cleanSheets: Number(p.total_clean_sheets) || 0,
       foulsDrawn: Number(p.total_fouls_drawn) || 0,
       reds: Number(p.total_reds) || 0,

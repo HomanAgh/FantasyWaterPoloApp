@@ -131,6 +131,7 @@ import LoadingScreen from './components/LoadingScreen';
 import PlayerDetailScreen from './screens/PlayerDetailScreen';
 import GWHistoryScreen from './screens/GWHistoryScreen';
 import LeagueDetailScreen from './screens/LeagueDetailScreen';
+import ViewTeamScreen from './screens/ViewTeamScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -344,6 +345,11 @@ function AppContent() {
       <Stack.Screen
         name="LeagueDetail"
         component={LeagueDetailScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="ViewTeam"
+        component={ViewTeamScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

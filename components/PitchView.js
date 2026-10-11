@@ -76,7 +76,7 @@ const PitchView = ({
     const gkSlots = [...Array(2)].map((_, i) => allGKs[i] || null);
     const outfieldSlots = [...Array(7)].map((_, i) => allOutfield[i] || null);
 
-    // Compact transfers pitch for 2 GK + 7 outfield: 2 / 3 / 2 / 2
+    // Compact transfers pitch for 2 GK + 7 outfield: 2 / 3 / 3 / 1
     return (
       <View style={styles.pitch}>
         <View style={styles.pitchInner}>
@@ -85,30 +85,30 @@ const PitchView = ({
             contentContainerStyle={styles.contentContainer}
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.compactRow}>
+            <View style={styles.compactRowTight}>
               {gkSlots.map((player, index) => (
-                <View key={player?.id || `gk-${index}`} style={styles.playerSlot}>
+                <View key={player?.id || `gk-${index}`} style={styles.playerSlotTight}>
                   {renderPlayerOrEmpty(player, 'GK', true)}
                 </View>
               ))}
             </View>
-            <View style={styles.compactRow}>
+            <View style={styles.compactRowTight}>
               {outfieldSlots.slice(0, 3).map((player, index) => (
-                <View key={player?.id || `of-${index}`} style={styles.playerSlot}>
+                <View key={player?.id || `of-${index}`} style={styles.playerSlotTight}>
                   {renderPlayerOrEmpty(player, 'Outfield', true)}
                 </View>
               ))}
             </View>
-            <View style={styles.compactRow}>
-              {outfieldSlots.slice(3, 5).map((player, index) => (
-                <View key={player?.id || `of-${index + 3}`} style={styles.playerSlot}>
+            <View style={styles.compactRowTight}>
+              {outfieldSlots.slice(3, 6).map((player, index) => (
+                <View key={player?.id || `of-${index + 3}`} style={styles.playerSlotTight}>
                   {renderPlayerOrEmpty(player, 'Outfield', true)}
                 </View>
               ))}
             </View>
-            <View style={styles.compactRow}>
-              {outfieldSlots.slice(5, 7).map((player, index) => (
-                <View key={player?.id || `of-${index + 5}`} style={styles.playerSlot}>
+            <View style={styles.compactRowTight}>
+              {outfieldSlots.slice(6, 7).map((player, index) => (
+                <View key={player?.id || `of-${index + 6}`} style={styles.playerSlotTight}>
                   {renderPlayerOrEmpty(player, 'Outfield', true)}
                 </View>
               ))}
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
   },
   substitutesSection: {
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md - 1,
     borderTopWidth: 1,
     borderTopColor: colors.auth.neonSoft,
   },
@@ -254,6 +254,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
     flexWrap: 'wrap',
   },
+  compactRowTight: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: ROW_GAP + spacing.xs,
+  },
+  playerSlotTight: {
+    alignItems: 'center',
+    marginHorizontal: spacing.xs,
+  },
   emptySlot: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -262,9 +273,9 @@ const styles = StyleSheet.create({
     minHeight: 90,
   },
   emptySlotCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
@@ -275,11 +286,10 @@ const styles = StyleSheet.create({
     borderColor: colors.auth.neonSoft,
   },
   emptySlotEmoji: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 34,
+    height: 34,
     opacity: 0.45,
-    resizeMode: 'cover',
+    resizeMode: 'contain',
   },
   emptySlotText: {
     fontFamily: fonts.barlowCondensedMedium,

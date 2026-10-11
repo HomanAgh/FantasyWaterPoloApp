@@ -142,8 +142,8 @@ export default function PlayerDetailScreen({ route, navigation }) {
                   <StatCell label="CLEAN SHEET" value={detail.totalCleanSheets} icon={Icons.clean} />
                   <StatCell label="ASSISTS" value={detail.totalAssists} icon={Icons.handshake} />
                   <StatCell label="GOALS" value={detail.totalGoals} icon={Icons.goal} />
+                  <StatCell label="STEALS" value={detail.totalSteals} icon={Icons.steals} />
                   <StatCell label="GAMES" value={detail.gamesPlayed} icon={Icons.miniball} />
-                  <StatCell label="FOULS DRAWN" value={detail.totalFoulsDrawn} icon={Icons.whistle} />
                   <StatCell
                     label="RED CARD"
                     value={detail.totalReds}
@@ -157,9 +157,10 @@ export default function PlayerDetailScreen({ route, navigation }) {
                   <StatCell label="ASSISTS" value={detail.totalAssists} icon={Icons.handshake} />
                   <StatCell label="BLOCKS" value={detail.totalBlocks} icon={Icons.stopp} />
                   <StatCell label="SPRINTS" value={detail.totalSprints} icon={Icons.tinyswimmer} />
+                  <StatCell label="STEALS" value={detail.totalSteals} icon={Icons.steals} />
+                  <StatCell label="FOULS DRAWN" value={detail.totalFoulsDrawn} icon={Icons.whistle} />
                   <StatCell label="CLEAN SHEET" value={detail.totalCleanSheets} icon={Icons.clean} />
                   <StatCell label="GAMES" value={detail.gamesPlayed} icon={Icons.miniball} />
-                  <StatCell label="FOULS DRAWN" value={detail.totalFoulsDrawn} icon={Icons.whistle} />
                   <StatCell
                     label="RED CARD"
                     value={detail.totalReds}
@@ -228,6 +229,7 @@ export default function PlayerDetailScreen({ route, navigation }) {
                       )}
                       {match.blocks > 0 && !isGK && <MatchStat label="BLC" value={match.blocks} />}
                       {match.sprints > 0 && !isGK && <MatchStat label="SPR" value={match.sprints} />}
+                      {match.steals > 0 && !isGK && <MatchStat label="STL" value={match.steals} />}
                       {match.foulsDrawn > 0 && <MatchStat label="PFD" value={match.foulsDrawn} />}
                       {match.cleanSheets > 0 && (
                         <MatchStat label="CS" value={match.cleanSheets} />

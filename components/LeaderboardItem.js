@@ -1,8 +1,15 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { Icons } from '../assets/images/icons';
 import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 
-export default function LeaderboardItem({ entry, isCurrentUser, onKick, onLongPress }) {
+export default function LeaderboardItem({
+  entry,
+  isCurrentUser,
+  onKick,
+  onLongPress,
+  onViewTeam,
+}) {
   const getRankStyle = (rank) => {
     if (rank === 1) return styles.rankGold;
     if (rank === 2) return styles.rankSilver;
@@ -10,7 +17,7 @@ export default function LeaderboardItem({ entry, isCurrentUser, onKick, onLongPr
     return styles.rankDefault;
   };
 
-  const content = (
+  const main = (
     <>
       <View style={[styles.rankBadge, getRankStyle(entry.rank)]}>
         <Text style={styles.rank}>{entry.rank}</Text>
@@ -31,29 +38,8 @@ export default function LeaderboardItem({ entry, isCurrentUser, onKick, onLongPr
           )}
         </View>
       </View>
-      {onKick ? (
-        <TouchableOpacity style={styles.kickButton} onPress={onKick} hitSlop={8}>
-          <Text style={styles.kickButtonText}>KICK</Text>
-        </TouchableOpacity>
-      ) : null}
     </>
   );
-
-  if (onLongPress) {
-    return (
-      <TouchableOpacity
-        style={[
-          styles.leaderboardItem,
-          isCurrentUser && styles.currentUserItem,
-        ]}
-        onLongPress={onLongPress}
-        delayLongPress={400}
-        activeOpacity={0.7}
-      >
-        {content}
-      </TouchableOpacity>
-    );
-  }
 
   return (
     <View
@@ -62,7 +48,36 @@ export default function LeaderboardItem({ entry, isCurrentUser, onKick, onLongPr
         isCurrentUser && styles.currentUserItem,
       ]}
     >
-      {content}
+      {onLongPress ? (
+        <TouchableOpacity
+          style={styles.mainPressable}
+          onLongPress={onLongPress}
+          delayLongPress={400}
+          activeOpacity={0.7}
+        >
+          {main}
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.mainPressable}>{main}</View>
+      )}
+
+      {onViewTeam ? (
+        <TouchableOpacity
+          style={styles.viewButton}
+          onPress={onViewTeam}
+          hitSlop={8}
+          activeOpacity={0.7}
+          accessibilityLabel={`View ${entry.team_name}`}
+        >
+          <Image source={Icons.teameye} style={styles.viewIcon} />
+        </TouchableOpacity>
+      ) : null}
+
+      {onKick ? (
+        <TouchableOpacity style={styles.kickButton} onPress={onKick} hitSlop={8}>
+          <Text style={styles.kickButtonText}>KICK</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -76,10 +91,14 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.auth.neonSoft,
   },
   currentUserItem: {
-    
     marginHorizontal: -spacing.sm,
     paddingHorizontal: spacing.sm,
     borderRadius: borderRadius.small,
+  },
+  mainPressable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   rankBadge: {
     width: 42,
@@ -133,7 +152,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   pointsContainer: {
-    
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: borderRadius.small,
@@ -149,6 +167,23 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlowCondensedRegular,
     fontSize: 12,
     color: colors.auth.placeholder,
+  },
+  viewButton: {
+    marginLeft: spacing.sm,
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.small,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    backgroundColor: 'rgba(0, 174, 239, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewIcon: {
+    width: 20,
+    height: 20,
+    resizeMode: 'contain',
+    tintColor: colors.auth.neon,
   },
   kickButton: {
     marginLeft: spacing.sm,

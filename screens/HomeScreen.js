@@ -33,7 +33,6 @@ export default function HomeScreen({ navigation }) {
     calculateGameweekPoints,
     teamName,
     lockedTotalPoints,
-    pendingDeductions,
     squadFinalized,
     isLoading: isTeamLoading,
     teamLoadError,
@@ -196,9 +195,6 @@ export default function HomeScreen({ navigation }) {
               {isLocked ? 'GW LIVE' : `GW${currentRound?.round_number || 1}`}
             </Text>
             <Text style={styles.pointsCircleValue}>{gameweekPoints}</Text>
-            {pendingDeductions > 0 && (
-              <Text style={styles.deductionNote}>-{pendingDeductions} hit</Text>
-            )}
             <Text style={styles.historyHint}>TAP FOR HISTORY</Text>
           </TouchableOpacity>
 
@@ -568,12 +564,6 @@ const styles = StyleSheet.create({
     fontSize: 56,
     color: colors.white,
     lineHeight: 46,
-  },
-  deductionNote: {
-    fontFamily: fonts.barlowCondensedBold,
-    fontSize: 11,
-    color: colors.coral,
-    marginTop: 2,
   },
   historyHint: {
     fontFamily: fonts.barlowCondensedMedium,

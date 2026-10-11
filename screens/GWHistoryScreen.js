@@ -93,14 +93,14 @@ export default function GWHistoryScreen({ navigation }) {
     });
     const usedBenchIds = scored.usedBenchIds || new Set();
 
+    // Cards/list show each player's own points; SUB/IN + GW total reflect auto-subs.
     const enriched = picks.map(pick => {
       const info = playerInfoMap[pick.player_id] || {};
       const slot = slotByStarter[pick.player_id];
       const ownRaw = scored.pointsMap?.[pick.player_id] ?? 0;
-      const countedRaw = pick.is_starter ? (slot?.rawPoints ?? 0) : ownRaw;
       const displayPts = pick.is_captain && pick.is_starter
-        ? countedRaw * 2
-        : countedRaw;
+        ? ownRaw * 2
+        : ownRaw;
       return {
         playerId: pick.player_id,
         name: info.name || 'Unknown',
@@ -108,7 +108,7 @@ export default function GWHistoryScreen({ navigation }) {
         team: info.teams?.name || '—',
         isStarter: pick.is_starter,
         isCaptain: pick.is_captain,
-        rawPoints: countedRaw,
+        rawPoints: ownRaw,
         ownRawPoints: ownRaw,
         displayPoints: pick.is_starter ? displayPts : ownRaw,
         wasAutoSub: !!slot?.wasAutoSub,
@@ -276,7 +276,7 @@ export default function GWHistoryScreen({ navigation }) {
             {/* Legend */}
             <View style={styles.legend}>
               <Text style={styles.legendText}>(C) = Captain — points doubled</Text>
-              <Text style={styles.legendText}>SUB = blank starter replaced by bench</Text>
+              <Text style={styles.legendText}>OUT = did not play; bench points counted in GW total</Text>
               <Text style={styles.legendText}>IN = bench player auto-subbed into XI</Text>
             </View>
           </>
@@ -311,7 +311,7 @@ function PlayerRow({ player, isStarter }) {
           )}
           {player.wasAutoSub && (
             <View style={styles.autoSubBadge}>
-              <Text style={styles.autoSubText}>SUB</Text>
+              <Text style={styles.autoSubText}>OUT</Text>
             </View>
           )}
           {player.autoSubbedIn && (

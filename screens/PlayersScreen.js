@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Alert,
   Image,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Icons } from '../assets/images/icons';
 import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { searchAndFilterPlayersWithStats } from '../services/playerService';
@@ -18,20 +19,28 @@ import { fetchTeams } from '../services/teamService';
 import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
 import * as playerRoundPointsService from '../services/playerRoundPointsService';
+import {
+  getReplaceSession,
+  clearReplaceSession,
+} from '../utils/transferReplaceSession';
 
 export default function PlayersScreen({ navigation, route }) {
-  // Get navigation params
-  const replacingPlayer = route?.params?.replacingPlayer;
-  const filterPosition = route?.params?.filterPosition;
-  const mode = route?.params?.mode || 'add'; // 'add' or 'replace'
+  // Mirrored from module store so UI updates; store survives PlayerDetail remounts.
+  const [replaceSession, setReplaceSession] = useState(() => getReplaceSession());
+  // Set right before opening PlayerDetail so blur cleanup does not end replace mode.
+  const keepReplaceForDetailRef = useRef(false);
+
+  const endReplaceSession = useCallback(() => {
+    clearReplaceSession();
+    setReplaceSession(null);
+  }, []);
+
+  const replacingPlayer = replaceSession?.replacingPlayer ?? null;
+  const filterPosition = replaceSession?.filterPosition ?? route?.params?.filterPosition;
+  const mode = replaceSession ? 'replace' : 'add';
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPosition, setSelectedPosition] = useState(() => {
-    // Auto-filter by position if replacing
-    if (filterPosition === 'GK') return 'Goalkeeper';
-    if (filterPosition === 'Outfield') return 'Field Player';
-    return 'All';
-  });
+  const [selectedPosition, setSelectedPosition] = useState('All');
   const [selectedTeam, setSelectedTeam] = useState('all');
   const [teams, setTeams] = useState([]);
   const [showTeamPicker, setShowTeamPicker] = useState(false);
@@ -47,6 +56,18 @@ export default function PlayersScreen({ navigation, route }) {
 
   // FPL-style: which stat is currently selected (controls sort + row display)
   const [statView, setStatView] = useState('pts');
+  // true = low→high / A→Z; false = high→low / Z→A (stats default high→low)
+  const [sortAsc, setSortAsc] = useState(false);
+
+  const handleSortPress = (key) => {
+    if (statView === key) {
+      setSortAsc((prev) => !prev);
+      return;
+    }
+    setStatView(key);
+    // Name defaults A→Z; numeric stats default high→low
+    setSortAsc(key === 'name');
+  };
 
   const positions = ['All', 'Goalkeeper', 'Field Player'];
 
@@ -72,6 +93,8 @@ export default function PlayersScreen({ navigation, route }) {
     { key: 'saves', label: 'SVS',  field: 'saves' },
     { key: 'blc',   label: 'BLC',  field: 'blocks' },
     { key: 'spr',   label: 'SPR',  field: 'sprints' },
+    { key: 'pfd', label: 'PFD', field: 'foulsDrawn' },
+    { key: 'stl',   label: 'STL',  field: 'steals' },
     { key: 'cs',    label: 'CS',   field: 'cleanSheets' },
     { key: 'app',   label: 'APP',  field: 'gamesPlayed' },
   ];
@@ -106,9 +129,51 @@ export default function PlayersScreen({ navigation, route }) {
     ? remainingBudget + replacingPlayer.price
     : remainingBudget;
 
+  // Same idea for squad size: outgoing player is treated as already out
+  const effectiveSquadCount = (mode === 'replace' && replacingPlayer)
+    ? Math.max(0, selectedPlayers.length - 1)
+    : selectedPlayers.length;
+
   // Post-GW1, a full squad cannot use addPlayer / removePlayer directly —
   // all changes must go through the Transfers → replace flow.
   const isSquadFull = selectedPlayers.length >= MAX_PLAYERS;
+
+  useFocusEffect(
+    useCallback(() => {
+      // Restore from module store after PlayerDetail / remount
+      const existing = getReplaceSession();
+      if (existing) {
+        setReplaceSession(existing);
+        if (existing.filterPosition === 'GK') setSelectedPosition('Goalkeeper');
+        else if (existing.filterPosition === 'Outfield') setSelectedPosition('Field Player');
+      } else {
+        const params = route.params || {};
+        if (params.filterPosition && params.mode !== 'replace') {
+          if (params.filterPosition === 'GK') setSelectedPosition('Goalkeeper');
+          else if (params.filterPosition === 'Outfield') setSelectedPosition('Field Player');
+          navigation.setParams({ filterPosition: null });
+        }
+      }
+
+      // Leaving Players ends replace — unless we opened PlayerDetail on purpose.
+      return () => {
+        if (keepReplaceForDetailRef.current) {
+          keepReplaceForDetailRef.current = false;
+          return;
+        }
+        clearReplaceSession();
+        setReplaceSession(null);
+      };
+    }, [navigation, route.params?.filterPosition, route.params?.mode])
+  );
+
+  // Tapping the Players tab again cancels an in-progress replace.
+  useEffect(() => {
+    const unsubTabPress = navigation.addListener('tabPress', () => {
+      endReplaceSession();
+    });
+    return unsubTabPress;
+  }, [navigation, endReplaceSession]);
 
   // Load teams on mount
   useEffect(() => {
@@ -178,6 +243,7 @@ export default function PlayersScreen({ navigation, route }) {
       setErrorMessage(result.error || 'Failed to transfer player');
       setTimeout(() => setErrorMessage(''), 5000);
     } else {
+      endReplaceSession();
       navigation.navigate('Transfers');
     }
   };
@@ -245,10 +311,13 @@ export default function PlayersScreen({ navigation, route }) {
     if (affordableOnly)    result = result.filter(p => p.price <= effectiveBudget);
 
     const col = STAT_COLS.find(c => c.key === statView);
+    const dir = sortAsc ? 1 : -1;
     result.sort((a, b) => {
-      if (statView === 'name') return a.name.localeCompare(b.name);
+      if (statView === 'name') {
+        return dir * a.name.localeCompare(b.name);
+      }
       const field = col?.field || 'points';
-      return (b[field] || 0) - (a[field] || 0);
+      return dir * ((a[field] || 0) - (b[field] || 0));
     });
 
     return result;
@@ -275,7 +344,7 @@ export default function PlayersScreen({ navigation, route }) {
         <View style={styles.statsRow}>
           <View style={styles.statBadge}>
             <Text style={styles.statLabel}>TEAM</Text>
-            <Text style={styles.statValue}>{selectedPlayers.length}/{MAX_PLAYERS}</Text>
+            <Text style={styles.statValue}>{effectiveSquadCount}/{MAX_PLAYERS}</Text>
           </View>
           <View style={styles.statBadge}>
             <Text style={styles.statLabel}>BUDGET</Text>
@@ -517,13 +586,13 @@ export default function PlayersScreen({ navigation, route }) {
 
               {/* ── Column 1: Fixed player name ── */}
               <View style={{ width: NAME_COL_W }}>
-                {/* Name column header – tap for A→Z sort */}
+                {/* Name column header – tap to sort A↔Z */}
                 <TouchableOpacity
                   style={[styles.th, styles.thName, statView === 'name' && styles.thActive]}
-                  onPress={() => setStatView('name')}
+                  onPress={() => handleSortPress('name')}
                   activeOpacity={0.7}>
                   <Text style={[styles.thText, statView === 'name' && styles.thTextActive]}>
-                    PLAYER {statView === 'name' ? '↑' : ''}
+                    PLAYER {statView === 'name' ? (sortAsc ? '↑' : '↓') : ''}
                   </Text>
                 </TouchableOpacity>
 
@@ -536,7 +605,10 @@ export default function PlayersScreen({ navigation, route }) {
                       idx % 2 === 0 ? styles.rowEven : styles.rowOdd,
                       selectedPlayers.some(p => p.id === player.id) && styles.rowInTeam,
                     ]}
-                    onPress={() => navigation.navigate('PlayerDetail', { playerId: player.id, player })}
+                    onPress={() => {
+                      keepReplaceForDetailRef.current = true;
+                      navigation.navigate('PlayerDetail', { playerId: player.id, player });
+                    }}
                     activeOpacity={0.7}>
                     <View style={[
                       styles.pcPosBadge,
@@ -569,13 +641,13 @@ export default function PlayersScreen({ navigation, route }) {
                       <TouchableOpacity
                         key={col.key}
                         style={[styles.th, { width: STAT_COL_W }, statView === col.key && styles.thActive]}
-                        onPress={() => setStatView(col.key)}
+                        onPress={() => handleSortPress(col.key)}
                         activeOpacity={0.7}>
                         <Text style={[styles.thText, statView === col.key && styles.thTextActive]}>
                           {col.label}
                         </Text>
                         {statView === col.key && (
-                          <Text style={styles.thArrow}>↓</Text>
+                          <Text style={styles.thArrow}>{sortAsc ? '↑' : '↓'}</Text>
                         )}
                       </TouchableOpacity>
                     ))}

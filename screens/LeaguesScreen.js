@@ -27,6 +27,7 @@ import {
 } from '../services/leagueService';
 import { reportTeamName } from '../services/userProfileService';
 
+const PAGE_SIZE = 50;
 const NAME_PATTERN = /^[a-zA-Z0-9\s\-_'!]+$/;
 
 function validateLeagueName(name) {
@@ -63,6 +64,8 @@ export default function LeaguesScreen({ navigation }) {
   const [myLeagues, setMyLeagues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState(null);
 
   const [createVisible, setCreateVisible] = useState(false);
@@ -76,7 +79,7 @@ export default function LeaguesScreen({ navigation }) {
 
     try {
       const [leaderboardResult, leaguesResult] = await Promise.all([
-        fetchGlobalLeaderboard(50),
+        fetchGlobalLeaderboard(PAGE_SIZE, 0),
         fetchMyLeagues(),
       ]);
 
@@ -88,7 +91,9 @@ export default function LeaguesScreen({ navigation }) {
         console.warn('Error fetching my leagues:', leaguesResult.error);
       }
 
-      setLeaderboard(leaderboardResult.data || []);
+      const rows = leaderboardResult.data || [];
+      setLeaderboard(rows);
+      setHasMore(rows.length >= PAGE_SIZE);
       setMyLeagues(leaguesResult.data || []);
     } catch (err) {
       console.error('Error loading leaderboard:', err);
@@ -98,6 +103,31 @@ export default function LeaguesScreen({ navigation }) {
       setRefreshing(false);
     }
   }, [userId]);
+
+  const loadMoreLeaderboard = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+
+    setLoadingMore(true);
+    try {
+      const { data, error: moreError } = await fetchGlobalLeaderboard(
+        PAGE_SIZE,
+        leaderboard.length
+      );
+
+      if (moreError) throw moreError;
+
+      const rows = data || [];
+      const seen = new Set(leaderboard.map(e => e.user_id));
+      const unique = rows.filter(e => !seen.has(e.user_id));
+      setLeaderboard([...leaderboard, ...unique]);
+      setHasMore(rows.length >= PAGE_SIZE);
+    } catch (err) {
+      console.error('Error loading more leaderboard:', err);
+      Alert.alert("Couldn't load more", 'Please try again.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, leaderboard]);
 
   useFocusEffect(
     useCallback(() => {
@@ -118,6 +148,14 @@ export default function LeaguesScreen({ navigation }) {
       leagueName: league.name,
       inviteCode: league.invite_code,
       createdBy: league.created_by,
+    });
+  };
+
+  const openViewTeam = (entry) => {
+    if (!entry?.user_id) return;
+    navigation.navigate('ViewTeam', {
+      userId: entry.user_id,
+      teamName: entry.team_name,
     });
   };
 
@@ -340,12 +378,15 @@ export default function LeaguesScreen({ navigation }) {
             </View>
           ) : (
             <>
-              <Text style={styles.reportHint}>LONG-PRESS A TEAM TO REPORT AN OFFENSIVE NAME</Text>
+              <Text style={styles.reportHint}>
+                TAP VIEW TO SEE THEIR TEAM · LONG-PRESS TO REPORT
+              </Text>
               {leaderboard.map((entry) => (
                 <LeaderboardItem
                   key={entry.user_id}
                   entry={entry}
                   isCurrentUser={entry.user_id === userId}
+                  onViewTeam={() => openViewTeam(entry)}
                   onLongPress={
                     entry.user_id !== userId
                       ? () => handleReportTeamName(entry)
@@ -353,6 +394,20 @@ export default function LeaguesScreen({ navigation }) {
                   }
                 />
               ))}
+              {hasMore ? (
+                <TouchableOpacity
+                  style={[styles.loadMoreButton, loadingMore && styles.loadMoreButtonDisabled]}
+                  onPress={loadMoreLeaderboard}
+                  disabled={loadingMore}
+                  activeOpacity={0.8}
+                >
+                  {loadingMore ? (
+                    <ActivityIndicator color={colors.auth.neon} />
+                  ) : (
+                    <Text style={styles.loadMoreButtonText}>SHOW MORE</Text>
+                  )}
+                </TouchableOpacity>
+              ) : null}
             </>
           )}
         </View>
@@ -663,6 +718,26 @@ const styles = StyleSheet.create({
     borderColor: colors.auth.neon,
   },
   retryButtonText: {
+    fontFamily: fonts.barlowCondensedBold,
+    fontSize: 14,
+    color: colors.auth.neon,
+    letterSpacing: 1,
+  },
+  loadMoreButton: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: borderRadius.medium,
+    borderWidth: 0.5,
+    borderColor: colors.auth.neon,
+    backgroundColor: 'rgba(0, 174, 239, 0.08)',
+    minHeight: 44,
+  },
+  loadMoreButtonDisabled: {
+    opacity: 0.7,
+  },
+  loadMoreButtonText: {
     fontFamily: fonts.barlowCondensedBold,
     fontSize: 14,
     color: colors.auth.neon,

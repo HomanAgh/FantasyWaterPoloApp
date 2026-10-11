@@ -55,7 +55,6 @@ export default function MyTeamScreen({ navigation }) {
     selectedPlayers,
     setPlayerAsStarter,
     swapPlayers,
-    reorderOutfieldSubs,
     remainingBudget,
     totalSpent,
     captainId,
@@ -74,7 +73,7 @@ export default function MyTeamScreen({ navigation }) {
   } = useTeam();
 
   const { userId } = useAuth();
-  const { currentRound, isLocked, timeToDeadline, formatDeadline } = useRound();
+  const { currentRound, isLocked } = useRound();
 
   // ── Current GW: enrich players with round points ──
   useEffect(() => {
@@ -89,18 +88,24 @@ export default function MyTeamScreen({ navigation }) {
         playerRoundPointsService.getMultiplePlayersPointsForRound(playerIds, currentRound.id),
         fetchAppearanceMap(playerIds, currentRound.id),
       ]);
-      const enriched = selectedPlayers.map(p => ({
-        ...p,
-        points: pointsMap[p.id] || 0,
-      }));
-      setEnrichedPlayers(enriched);
-
       const picks = picksFromSelectedPlayers(selectedPlayers, captainId);
-      const { total } = resolveSquadPointsWithAutoSub(
+      const { total, slots, usedBenchIds } = resolveSquadPointsWithAutoSub(
         picks,
         appearanceMap,
         pointsMap || {}
       );
+      const slotByStarter = {};
+      (slots || []).forEach(slot => {
+        slotByStarter[slot.starterId] = slot;
+      });
+      const enriched = selectedPlayers.map(p => ({
+        ...p,
+        totalPoints: p.points ?? 0,
+        points: pointsMap[p.id] || 0,
+        wasAutoSub: !!slotByStarter[p.id]?.wasAutoSub,
+        autoSubbedIn: usedBenchIds?.has(p.id) || false,
+      }));
+      setEnrichedPlayers(enriched);
       setLiveGameweekPoints(total);
     };
     loadGameweekPoints();
@@ -166,14 +171,11 @@ export default function MyTeamScreen({ navigation }) {
     });
     const usedBenchIds = scored.usedBenchIds || new Set();
 
+    // Own GW points on cards; auto-sub only affects the GW total + SUB/IN badges.
     const enriched = picks.map(pick => {
       const info = playerInfoMap[pick.player_id] || {};
       const slot = slotByStarter[pick.player_id];
       const ownPoints = scored.pointsMap?.[pick.player_id] ?? 0;
-      // Starters show points that counted for their slot (incl. auto-sub)
-      const displayPoints = pick.is_starter
-        ? (slot?.rawPoints ?? 0)
-        : ownPoints;
       return {
         id: pick.player_id,
         name: info.name || 'Unknown',
@@ -182,7 +184,8 @@ export default function MyTeamScreen({ navigation }) {
         price: info.price ? parseFloat(info.price) : 0,
         isStarter: pick.is_starter,
         isCaptain: pick.is_captain,
-        points: displayPoints,
+        points: ownPoints,
+        totalPoints: info.points_total ?? 0,
         positionOrder: pick.position_order ?? 0,
         wasAutoSub: !!slot?.wasAutoSub,
         autoSubFromId: slot?.wasAutoSub ? slot.usedPlayerId : null,
@@ -199,7 +202,7 @@ export default function MyTeamScreen({ navigation }) {
     try {
       const { data, error } = await supabase
         .from('players')
-        .select('id, name, position, price, teams(name)')
+        .select('id, name, position, price, points_total, teams(name)')
         .in('id', ids);
       if (error) throw error;
       return { data: data || [] };
@@ -239,41 +242,9 @@ export default function MyTeamScreen({ navigation }) {
     setSelectedPlayer(null);
   };
 
-  const sortedOutfieldSubs = enrichedPlayers
-    .filter(p => !p.isStarter && p.position === 'Outfield')
-    .sort((a, b) => (a.positionOrder || 0) - (b.positionOrder || 0));
-
-  const handleMoveSubUp = async () => {
-    const idx = sortedOutfieldSubs.findIndex(p => p.id === selectedPlayer?.id);
-    if (idx <= 0) return;
-    setModalVisible(false);
-    await reorderOutfieldSubs(selectedPlayer.id, sortedOutfieldSubs[idx - 1].id);
-    setSelectedPlayer(null);
-  };
-
-  const handleMoveSubDown = async () => {
-    const idx = sortedOutfieldSubs.findIndex(p => p.id === selectedPlayer?.id);
-    if (idx < 0 || idx >= sortedOutfieldSubs.length - 1) return;
-    setModalVisible(false);
-    await reorderOutfieldSubs(selectedPlayer.id, sortedOutfieldSubs[idx + 1].id);
-    setSelectedPlayer(null);
-  };
-
   const handleCloseModal = () => {
     setModalVisible(false);
     setSelectedPlayer(null);
-  };
-
-  const getDeadlineText = () => {
-    if (!currentRound) return 'NO ACTIVE ROUND';
-    if (isLocked) return `GAMEWEEK ${currentRound.round_number} — LIVE`;
-    if (timeToDeadline) {
-      const { days, hours, minutes } = timeToDeadline;
-      if (days > 0) return `DEADLINE: ${days}D ${hours}H`;
-      if (hours > 0) return `DEADLINE: ${hours}H ${minutes}M`;
-      return `DEADLINE: ${minutes}M`;
-    }
-    return formatDeadline ? formatDeadline(currentRound.deadline) : 'DEADLINE PASSED';
   };
 
   return (
@@ -282,7 +253,6 @@ export default function MyTeamScreen({ navigation }) {
       {/* ── Header ── */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Image source={Icons.splash} style={styles.teamEmoji} />
           <Text style={styles.title}>{(teamName || 'MY TEAM').toUpperCase()}</Text>
 
           {!isHistoryMode && (
@@ -301,12 +271,6 @@ export default function MyTeamScreen({ navigation }) {
                   <Text style={styles.statValue}>{selectedPlayers.length}/{MAX_PLAYERS}</Text>
                 </View>
               </View>
-              {currentRound && (
-                <View style={styles.deadlineBadge}>
-                  <Image source={Icons.clock} style={styles.deadlineIcon} />
-                  <Text style={styles.deadlineText}>{getDeadlineText()}</Text>
-                </View>
-              )}
             </>
           )}
         </View>
@@ -479,6 +443,7 @@ export default function MyTeamScreen({ navigation }) {
                         {!isHistoryMode && selectedPlayer.price
                           ? ` • $${selectedPlayer.price.toFixed(1)}M`
                           : ''}
+                        {` • ${selectedPlayer.totalPoints ?? selectedPlayer.points ?? 0} pts`}
                       </Text>
                     </View>
                   </View>
@@ -509,12 +474,14 @@ export default function MyTeamScreen({ navigation }) {
                         </Text>
                       )}
                       {selectedPlayer.wasAutoSub && (
-                        <Text style={styles.historyBenchNote}>Auto-sub points counted</Text>
+                        <Text style={styles.historyBenchNote}>
+                          Did not play — bench auto-sub counted in GW total
+                        </Text>
                       )}
                       {!selectedPlayer.isStarter && (
                         <Text style={styles.historyBenchNote}>
                           {selectedPlayer.autoSubbedIn
-                            ? 'Auto-subbed into XI'
+                            ? 'Auto-subbed into XI (points in GW total)'
                             : 'Bench — did not count'}
                         </Text>
                       )}
@@ -536,7 +503,7 @@ export default function MyTeamScreen({ navigation }) {
                         activeOpacity={0.8}>
                         <Image source={Icons.trophy} style={styles.modalButtonIcon} />
                         <Text style={styles.modalButtonText}>Set as Captain</Text>
-                        <Text style={styles.modalButtonSubtext}>2× points</Text>
+                        <Text style={styles.modalButtonSubtext}>2× Points</Text>
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity
@@ -548,32 +515,6 @@ export default function MyTeamScreen({ navigation }) {
                         {selectedPlayer.isStarter ? 'Swap with Substitute' : 'Swap with Starter'}
                       </Text>
                     </TouchableOpacity>
-                    {!selectedPlayer.isStarter && selectedPlayer.position === 'Outfield' && (() => {
-                      const idx = sortedOutfieldSubs.findIndex(p => p.id === selectedPlayer.id);
-                      return (
-                        <View style={styles.reorderRow}>
-                          <TouchableOpacity
-                            style={[styles.reorderButton, idx <= 0 && styles.reorderButtonDisabled]}
-                            onPress={handleMoveSubUp}
-                            disabled={idx <= 0}
-                            activeOpacity={0.8}>
-                            <Text style={styles.reorderButtonIcon}>▲</Text>
-                            <Text style={styles.reorderButtonText}>Higher Priority</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[
-                              styles.reorderButton,
-                              idx >= sortedOutfieldSubs.length - 1 && styles.reorderButtonDisabled,
-                            ]}
-                            onPress={handleMoveSubDown}
-                            disabled={idx >= sortedOutfieldSubs.length - 1}
-                            activeOpacity={0.8}>
-                            <Text style={styles.reorderButtonIcon}>▼</Text>
-                            <Text style={styles.reorderButtonText}>Lower Priority</Text>
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    })()}
                     <TouchableOpacity
                       style={[styles.modalButton, styles.modalButtonCancel]}
                       onPress={handleCloseModal}
@@ -693,7 +634,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.auth.glass,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.md + 4,
+    paddingVertical: spacing.xs,
     borderRadius: borderRadius.medium,
     borderWidth: 0.5,
     borderColor: colors.auth.neon,
@@ -727,33 +668,6 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingVertical: spacing.sm,
   },
-  deadlineBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    width: '100%',
-    borderWidth: 0.5,
-    borderColor: colors.sand,
-    backgroundColor: colors.auth.inputBg,
-    borderRadius: borderRadius.medium,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.lg + 4,
-    marginTop: spacing.md,
-  },
-  deadlineIcon: {
-    width: 16,
-    height: 16,
-    resizeMode: 'contain',
-    tintColor: colors.sand,
-  },
-  deadlineText: {
-    fontFamily: fonts.barlowCondensedSemiBold,
-    fontSize: 16,
-    color: colors.sand,
-    letterSpacing: 0.5,
-  },
-
   gwPickerWrapper: {
     backgroundColor: 'transparent',
     marginBottom: spacing.sm,
@@ -1001,13 +915,13 @@ const styles = StyleSheet.create({
   },
   modalPlayerName: {
     fontFamily: fonts.barlowCondensedExtraBold,
-    fontSize: 20,
+    fontSize: 24,
     color: colors.white,
     marginBottom: 4,
   },
   modalPlayerDetails: {
     fontFamily: fonts.barlowCondensedRegular,
-    fontSize: 14,
+    fontSize: 16,
     color: colors.auth.placeholder,
   },
   modalCaptainBadge: {
@@ -1052,18 +966,18 @@ const styles = StyleSheet.create({
   },
   modalButtonText: {
     fontFamily: fonts.barlowCondensedBold,
-    fontSize: 16,
+    fontSize: 20,
     color: colors.white,
     flex: 1,
   },
   modalButtonSubtext: {
     fontFamily: fonts.barlowCondensedRegular,
-    fontSize: 12,
+    fontSize: 20,
     color: colors.sand,
   },
   modalButtonTextCancel: {
     fontFamily: fonts.barlowCondensedBold,
-    fontSize: 16,
+    fontSize: 20,
     color: colors.auth.placeholder,
     textAlign: 'center',
     flex: 1,
@@ -1166,36 +1080,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: colors.auth.neon,
     fontWeight: 'bold',
-  },
-
-  reorderRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  reorderButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    backgroundColor: colors.auth.inputBg,
-    borderWidth: 0.5,
-    borderColor: colors.auth.neon,
-  },
-  reorderButtonDisabled: {
-    opacity: 0.35,
-  },
-  reorderButtonIcon: {
-    fontSize: 14,
-    color: colors.auth.neon,
-    fontWeight: 'bold',
-  },
-  reorderButtonText: {
-    fontFamily: fonts.barlowCondensedBold,
-    fontSize: 13,
-    color: colors.white,
   },
 });
 
