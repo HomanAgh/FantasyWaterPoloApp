@@ -4,7 +4,7 @@
 
 ## Goal
 
-Ship read-only viewing of other managers’ locked GW squads from leaderboards, add mid-season **steals** scoring, fix GW snapshot chicken-and-egg (finalize gate), harden transfer replace navigation, and polish pitch/background assets for the next Play Store build (`versionCode` 4 / `1.1.0`).
+Ship read-only viewing of other managers’ locked GW squads from leaderboards, add mid-season **steals** scoring, fix GW snapshot chicken-and-egg (finalize gate), harden transfer replace navigation, and polish pitch/background assets for the next Play Store build (`versionCode` 5 / `1.1.1`; Play already has 4 / 1.1.0).
 
 **Stack:** React Native 0.83, Expo ~55, Supabase, Android physical device (USB)
 
@@ -27,7 +27,7 @@ Sessions 8–9 remain on stacked feature branches (not yet all on `main`):
 - Migration **020** — `snapshot_missing_gw_picks` no longer requires `squad_finalized` (server-finalizes on snapshot)
 - `transferReplaceSession` — replace-player state survives PlayerDetail stack push
 - UI: new background, red/white caps, steal icon; LeaderboardItem view button; My Team / Transfers cleanup
-- Store version bump: **1.0.0 / versionCode 3 → 1.1.0 / versionCode 4**
+- Store version bump: **1.1.0 / versionCode 4 → 1.1.1 / versionCode 5** (4 already live on Play)
 
 **Branch:** `feat/view-team-steals-snapshot` (cut from `feat/autosub-squad9-scoring`)
 
@@ -127,7 +127,7 @@ WHERE routine_schema = 'public'
 
 ## Play Store note
 
-This branch bumps Android/iOS marketing version to **1.1.0** and Android **versionCode 4**. Build a signed release AAB from this commit after migrations 020–022 are on prod.
+This branch targets Play with marketing version **1.1.1** and Android **versionCode 5** (Play production already has 4 / 1.1.0). Build a signed release AAB from this commit after migrations 020–022 are on prod.
 
 ---
 
@@ -147,4 +147,4 @@ This branch bumps Android/iOS marketing version to **1.1.0** and Android **versi
 3. Own row / private league detail view button also opens View Team.
 4. Admin: enter OF `steals` → match points +2 each; GK steals do not add; player detail shows STEALS.
 5. Transfers: start replace → open player detail → back → still in replace mode with correct outgoing player.
-6. Background / caps / steal icon render; build with versionCode 4.
+6. Background / caps / steal icon render; build with versionCode 5.
