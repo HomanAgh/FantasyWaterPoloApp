@@ -132,6 +132,7 @@ import PlayerDetailScreen from './screens/PlayerDetailScreen';
 import GWHistoryScreen from './screens/GWHistoryScreen';
 import LeagueDetailScreen from './screens/LeagueDetailScreen';
 import ViewTeamScreen from './screens/ViewTeamScreen';
+import { startAdsIfAllowed } from './services/adsService';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -402,6 +403,17 @@ export default Sentry.wrap(function App() {
     BarlowCondensed_800ExtraBold,
     BarlowCondensed_800ExtraBold_Italic,
   });
+
+  useEffect(() => {
+    if (!fontsLoaded) {
+      return;
+    }
+    // UMP consent first; only init/preload when canRequestAds.
+    // __DEV__ uses TestIds.REWARDED (safe to click) + EEA debug geography.
+    startAdsIfAllowed({ preload: true }).catch(() => {
+      // Ads must never block app startup
+    });
+  }, [fontsLoaded]);
 
   if (!fontsLoaded) {
     return (

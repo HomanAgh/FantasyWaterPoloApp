@@ -15,6 +15,17 @@ import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { useAuth } from '../context/AuthContext';
 import { useTeam } from '../context/TeamContext';
 import { LEGAL_URLS } from '../utils/legalUrls';
+import {
+  isUsingTestAds,
+  resetAdsStartCache,
+  showRewardedAd,
+  startAdsIfAllowed,
+} from '../services/adsService';
+import {
+  openPrivacyOptionsForm,
+  resetConsentGatherCache,
+  resetUmpConsentForDev,
+} from '../services/adsConsentService';
 
 const LEGAL_LINKS = [
   { label: 'PRIVACY POLICY', url: LEGAL_URLS.privacy },
@@ -27,9 +38,13 @@ export default function ProfileScreen() {
   const { teamName } = useTeam();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isShowingAd, setIsShowingAd] = useState(false);
+  const [isPrivacyBusy, setIsPrivacyBusy] = useState(false);
+  const [isResettingUmp, setIsResettingUmp] = useState(false);
 
   const email = session?.user?.email ?? '—';
-  const busy = isLoggingOut || isDeleting;
+  const busy =
+    isLoggingOut || isDeleting || isShowingAd || isPrivacyBusy || isResettingUmp;
 
   const openLegalUrl = async (url) => {
     try {
@@ -37,6 +52,98 @@ export default function ProfileScreen() {
     } catch (err) {
       Alert.alert('Unable to Open', 'Could not open the link. Please try again.');
     }
+  };
+
+  const handleTestRewardedAd = async () => {
+    setIsShowingAd(true);
+    try {
+      const result = await showRewardedAd();
+      if (result.error) {
+        Alert.alert('Ad Error', result.error);
+        return;
+      }
+      if (result.rewarded) {
+        Alert.alert(
+          'Reward Earned (test)',
+          `type=${result.reward?.type ?? '—'}, amount=${result.reward?.amount ?? '—'}\n\nNo in-game reward is granted yet — this only verifies AdMob.`
+        );
+      } else {
+        Alert.alert('Ad Closed', 'No reward earned (ad closed early or incomplete).');
+      }
+    } catch (err) {
+      Alert.alert('Ad Error', err?.message || 'Something went wrong showing the ad.');
+    } finally {
+      setIsShowingAd(false);
+    }
+  };
+
+  const handlePrivacyChoices = async () => {
+    setIsPrivacyBusy(true);
+    try {
+      const result = await openPrivacyOptionsForm();
+      if (result.error === 'not_required') {
+        Alert.alert(
+          'Privacy Choices',
+          'No additional privacy options are required for your region right now.'
+        );
+        return;
+      }
+      if (!result.ok) {
+        Alert.alert(
+          'Privacy Choices',
+          result.error || 'Could not open privacy options. Please try again.'
+        );
+        return;
+      }
+      // User may have changed consent — allow ads startup to run again.
+      resetConsentGatherCache();
+      resetAdsStartCache();
+      await startAdsIfAllowed({ preload: true });
+      Alert.alert(
+        'Privacy Choices Updated',
+        result.canRequestAds
+          ? 'Your choices were saved. Ads may be available again.'
+          : 'Your choices were saved. Ads may stay unavailable until you allow them.'
+      );
+    } catch (err) {
+      Alert.alert(
+        'Privacy Choices',
+        err?.message || 'Could not open privacy options. Please try again.'
+      );
+    } finally {
+      setIsPrivacyBusy(false);
+    }
+  };
+
+  const handleResetUmpForDev = () => {
+    Alert.alert(
+      'Reset UMP Consent?',
+      'Clears stored UMP consent on this device (dev only). Force-close and reopen the app afterward to see the US privacy form again.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            setIsResettingUmp(true);
+            try {
+              const result = resetUmpConsentForDev();
+              resetAdsStartCache();
+              if (!result.ok) {
+                Alert.alert('Reset Failed', result.error || 'Could not reset UMP.');
+                return;
+              }
+              Alert.alert(
+                'UMP Reset',
+                  'Consent cleared. Force-close the app, then reopen to gather consent again (debug geography = EEA).'
+              );
+            } finally {
+              setIsResettingUmp(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleLogout = () => {
@@ -165,7 +272,69 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </React.Fragment>
         ))}
+
+        <View style={styles.fieldDivider} />
+        <TouchableOpacity
+          style={styles.legalRow}
+          onPress={handlePrivacyChoices}
+          activeOpacity={0.7}
+          disabled={busy}
+        >
+          {isPrivacyBusy ? (
+            <ActivityIndicator color={colors.auth.neon} />
+          ) : (
+            <>
+              <Text style={styles.legalLabel}>PRIVACY CHOICES</Text>
+              <Text style={styles.chevron}>›</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
+
+      {/* ── Dev-only AdMob smoke test (Google demo units — safe to click) ── */}
+      {__DEV__ && (
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>ADS (DEV)</Text>
+            <Image source={Icons.eye} style={[styles.cardHeaderIcon, styles.iconNeon]} />
+          </View>
+          <Text style={styles.devAdHint}>
+            Uses Google sample rewarded ads
+            {isUsingTestAds() ? ' (test mode)' : ''}. Safe to watch/click. No live AdMob traffic.
+            {'\n'}UMP debug geography: EEA (__DEV__ only).
+          </Text>
+          <TouchableOpacity
+            style={[styles.outlineButton, busy && styles.buttonDisabled]}
+            onPress={handleTestRewardedAd}
+            disabled={busy}
+            activeOpacity={0.8}
+          >
+            {isShowingAd ? (
+              <ActivityIndicator color={colors.auth.neon} />
+            ) : (
+              <>
+                <Text style={styles.outlineButtonText}>TEST REWARDED AD</Text>
+                <Text style={styles.chevron}>›</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.outlineButton, styles.devResetButton, busy && styles.buttonDisabled]}
+            onPress={handleResetUmpForDev}
+            disabled={busy}
+            activeOpacity={0.8}
+          >
+            {isResettingUmp ? (
+              <ActivityIndicator color={colors.auth.neon} />
+            ) : (
+              <>
+                <Text style={styles.outlineButtonText}>RESET UMP CONSENT</Text>
+                <Text style={styles.chevron}>›</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Actions ── */}
       <View style={styles.actionsCard}>
@@ -195,7 +364,14 @@ export default function ProfileScreen() {
           {isDeleting ? (
             <ActivityIndicator color={colors.coral} />
           ) : (
-            <Text style={styles.deleteButtonText}>DELETE ACCOUNT</Text>
+            <>
+              <Image
+                source={Icons.warning}
+                style={[styles.outlineButtonIcon, styles.iconCoral]}
+              />
+              <Text style={styles.deleteButtonText}>DELETE ACCOUNT</Text>
+              <Text style={[styles.chevron, styles.chevronDanger]}>›</Text>
+            </>
           )}
         </TouchableOpacity>
       </View>
@@ -261,6 +437,17 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     resizeMode: 'contain',
+  },
+  devAdHint: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 13,
+    color: colors.auth.statLabel,
+    letterSpacing: 0.3,
+    marginBottom: spacing.md,
+    lineHeight: 18,
+  },
+  devResetButton: {
+    marginTop: spacing.sm,
   },
 
   fieldRow: {
@@ -336,24 +523,32 @@ const styles = StyleSheet.create({
   },
 
   deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: spacing.sm,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.medium,
-    alignItems: 'center',
+    borderRadius: borderRadius.round,
+    minHeight: 52,
     justifyContent: 'center',
-    minHeight: 48,
     borderWidth: 0.5,
-    borderColor: colors.coral,
-    backgroundColor: 'rgba(229, 57, 53, 0.15)',
+    borderColor: colors.white,
+    backgroundColor: colors.coral,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   deleteButtonText: {
-    fontFamily: fonts.barlowCondensedExtraBold,
-    fontSize: 16,
+    flex: 1,
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 22,
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+  iconCoral: {
+    tintColor: colors.white,
+  },
+  chevronDanger: {
     color: colors.coral,
-    letterSpacing: 1,
   },
 });

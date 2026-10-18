@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Icons } from '../assets/images/icons';
 import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { useAuth } from '../context/AuthContext';
+import { useRound } from '../context/RoundContext';
 import LeaderboardItem from '../components/LeaderboardItem';
 import {
   fetchGlobalLeaderboard,
@@ -25,7 +26,9 @@ import {
   createLeague,
   joinLeague,
 } from '../services/leagueService';
+import { fetchNextRound } from '../services/roundService';
 import { reportTeamName } from '../services/userProfileService';
+import { ensureScoutAccessThen } from '../services/scoutAccessService';
 
 const PAGE_SIZE = 50;
 const NAME_PATTERN = /^[a-zA-Z0-9\s\-_'!]+$/;
@@ -60,6 +63,7 @@ function validateInviteCode(code) {
 
 export default function LeaguesScreen({ navigation }) {
   const { userId } = useAuth();
+  const { currentRound, isLocked } = useRound();
   const [leaderboard, setLeaderboard] = useState([]);
   const [myLeagues, setMyLeagues] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,7 +76,35 @@ export default function LeaguesScreen({ navigation }) {
   const [joinVisible, setJoinVisible] = useState(false);
   const [leagueName, setLeagueName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
+  const [startFromNextRound, setStartFromNextRound] = useState(false);
+  const [upcomingRoundNumber, setUpcomingRoundNumber] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resolveUpcomingRound() {
+      if (!currentRound) {
+        if (!cancelled) setUpcomingRoundNumber(null);
+        return;
+      }
+
+      if (!isLocked) {
+        if (!cancelled) setUpcomingRoundNumber(currentRound.round_number);
+        return;
+      }
+
+      const { data } = await fetchNextRound(currentRound.round_number);
+      if (!cancelled) {
+        setUpcomingRoundNumber(data?.round_number ?? null);
+      }
+    }
+
+    resolveUpcomingRound();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentRound, isLocked]);
 
   const loadScreenData = useCallback(async () => {
     setError(null);
@@ -148,14 +180,19 @@ export default function LeaguesScreen({ navigation }) {
       leagueName: league.name,
       inviteCode: league.invite_code,
       createdBy: league.created_by,
+      scoringStartRoundNumber: league.scoring_start_round_number ?? null,
     });
   };
 
   const openViewTeam = (entry) => {
     if (!entry?.user_id) return;
-    navigation.navigate('ViewTeam', {
-      userId: entry.user_id,
-      teamName: entry.team_name,
+    ensureScoutAccessThen({
+      isOwnTeam: entry.user_id === userId,
+      navigate: () =>
+        navigation.navigate('ViewTeam', {
+          userId: entry.user_id,
+          teamName: entry.team_name,
+        }),
     });
   };
 
@@ -190,6 +227,7 @@ export default function LeaguesScreen({ navigation }) {
     if (submitting) return;
     setCreateVisible(false);
     setLeagueName('');
+    setStartFromNextRound(false);
   };
 
   const closeJoinModal = () => {
@@ -205,8 +243,18 @@ export default function LeaguesScreen({ navigation }) {
       return;
     }
 
+    if (startFromNextRound && upcomingRoundNumber == null) {
+      Alert.alert(
+        'No upcoming round',
+        'There is no upcoming gameweek to start scoring from yet.'
+      );
+      return;
+    }
+
     setSubmitting(true);
-    const { data, error: createError } = await createLeague(leagueName.trim());
+    const { data, error: createError } = await createLeague(leagueName.trim(), {
+      startFromNextRound,
+    });
     setSubmitting(false);
 
     if (createError || !data) {
@@ -219,12 +267,15 @@ export default function LeaguesScreen({ navigation }) {
 
     setCreateVisible(false);
     setLeagueName('');
+    setStartFromNextRound(false);
     const created = {
       id: data.id,
       name: data.name,
       invite_code: data.invite_code,
       created_by: userId,
       member_count: 1,
+      scoring_start_round_id: data.scoring_start_round_id ?? null,
+      scoring_start_round_number: data.scoring_start_round_number ?? null,
     };
     setMyLeagues((prev) => [
       created,
@@ -339,6 +390,9 @@ export default function LeaguesScreen({ navigation }) {
                     <Text style={styles.leagueRowMeta}>
                       {league.member_count} MEMBER{league.member_count !== 1 ? 'S' : ''}
                       {league.created_by === userId ? ' · ADMIN' : ''}
+                      {league.scoring_start_round_number
+                        ? ` · FROM GAMEWEEK ${league.scoring_start_round_number}`
+                        : ''}
                     </Text>
                   </View>
                   <Text style={styles.chevron}>›</Text>
@@ -427,6 +481,11 @@ export default function LeaguesScreen({ navigation }) {
         submitting={submitting}
         onSubmit={handleCreateLeague}
         onClose={closeCreateModal}
+        scoringOptions={{
+          startFromNextRound,
+          onChangeStartFromNextRound: setStartFromNextRound,
+          upcomingRoundNumber,
+        }}
       />
 
       <LeagueFormModal
@@ -464,7 +523,11 @@ function LeagueFormModal({
   submitting,
   onSubmit,
   onClose,
+  scoringOptions,
 }) {
+  const freshStartDisabled =
+    scoringOptions && scoringOptions.upcomingRoundNumber == null;
+
   return (
     <Modal
       animationType="slide"
@@ -497,8 +560,70 @@ function LeagueFormModal({
             editable={!submitting}
           />
           <Text style={styles.modalHint}>{hint}</Text>
+
+          {scoringOptions ? (
+            <View style={styles.scoringOptions}>
+              <Text style={styles.modalLabel}>SCORING RULE OPTIONS</Text>
+              <TouchableOpacity
+                style={[
+                  styles.scoringChip,
+                  !scoringOptions.startFromNextRound && styles.scoringChipActive,
+                ]}
+                onPress={() => scoringOptions.onChangeStartFromNextRound(false)}
+                disabled={submitting}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.scoringChipText,
+                    !scoringOptions.startFromNextRound && styles.scoringChipTextActive,
+                  ]}
+                >
+                  ALL SEASON POINTS
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.scoringChipHint}>
+                Members keep points they have already earned
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.scoringChip,
+                  scoringOptions.startFromNextRound && styles.scoringChipActive,
+                  freshStartDisabled && styles.scoringChipDisabled,
+                ]}
+                onPress={() => {
+                  if (!freshStartDisabled) {
+                    scoringOptions.onChangeStartFromNextRound(true);
+                  }
+                }}
+                disabled={submitting || freshStartDisabled}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.scoringChipText,
+                    scoringOptions.startFromNextRound && styles.scoringChipTextActive,
+                  ]}
+                >
+                  {scoringOptions.upcomingRoundNumber != null
+                    ? `START FROM GAMEWEEK ${scoringOptions.upcomingRoundNumber}`
+                    : 'START FROM NEXT GAMEWEEK'}
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.scoringChipHint}>
+                {freshStartDisabled
+                  ? 'No upcoming gameweek available right now'
+                  : 'Everyone starts at 0 from that gameweek onward'}
+              </Text>
+            </View>
+          ) : null}
+
           <TouchableOpacity
-            style={[styles.modalSubmit, submitting && styles.disabledButton]}
+            style={[
+              styles.outlineButton,
+              styles.modalSubmit,
+              submitting && styles.disabledButton,
+            ]}
             onPress={onSubmit}
             disabled={submitting}
             activeOpacity={0.8}
@@ -506,15 +631,27 @@ function LeagueFormModal({
             {submitting ? (
               <ActivityIndicator color={colors.white} />
             ) : (
-              <Text style={styles.modalSubmitText}>{submitLabel}</Text>
+              <>
+                <Image
+                  source={
+                    submitLabel === 'JOIN LEAGUE' ? Icons.join : Icons.createleague
+                  }
+                  style={[styles.outlineButtonIcon, styles.iconWhite]}
+                />
+                <Text style={styles.modalSubmitText}>{submitLabel}</Text>
+                <Text style={[styles.chevron, styles.chevronOnFilled]}>›</Text>
+              </>
             )}
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.modalCancel}
+            style={[styles.outlineButton, styles.modalCancel]}
             onPress={onClose}
             disabled={submitting}
+            activeOpacity={0.8}
           >
-            <Text style={styles.modalCancelText}>CANCEL</Text>
+            <View style={styles.outlineButtonIconSpacer} />
+            <Text style={styles.outlineButtonText}>CANCEL</Text>
+            <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -618,6 +755,10 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
     marginRight: spacing.sm,
   },
+  outlineButtonIconSpacer: {
+    width: 20,
+    marginRight: spacing.sm,
+  },
   outlineButtonText: {
     flex: 1,
     fontFamily: fonts.barlowCondensedExtraBoldItalic,
@@ -625,12 +766,18 @@ const styles = StyleSheet.create({
     color: colors.white,
     letterSpacing: 0.5,
   },
+  iconWhite: {
+    tintColor: colors.white,
+  },
   chevron: {
     fontSize: 28,
     color: colors.auth.neon,
     fontWeight: '300',
     lineHeight: 28,
     marginTop: -2,
+  },
+  chevronOnFilled: {
+    color: colors.white,
   },
 
   leaderboardCard: {
@@ -797,33 +944,66 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     marginBottom: spacing.md,
   },
-  modalSubmit: {
-    backgroundColor: colors.auth.buttonTop,
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    alignItems: 'center',
-    justifyContent: 'center',
+  scoringOptions: {
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  scoringChip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.round,
+    backgroundColor: colors.auth.inputBg,
     borderWidth: 0.5,
     borderColor: colors.auth.neon,
-    minHeight: 48,
+  },
+  scoringChipActive: {
+    backgroundColor: colors.auth.glass,
+    borderColor: colors.auth.neon,
+    shadowColor: colors.auth.neon,
+    shadowOpacity: 0.55,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  scoringChipDisabled: {
+    opacity: 0.45,
+  },
+  scoringChipText: {
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 24,
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+  scoringChipTextActive: {
+    color: colors.white,
+  },
+  scoringChipHint: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 12,
+    color: colors.auth.statLabel,
+    letterSpacing: 0.2,
+    marginTop: -spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  // Keep filled create/join CTA colors; layout matches outline buttons
+  modalSubmit: {
+    backgroundColor: colors.auth.buttonTop,
+    borderColor: colors.auth.neon,
+    justifyContent: 'center',
+    minHeight: 52,
   },
   modalSubmitText: {
-    fontFamily: fonts.barlowCondensedExtraBold,
-    fontSize: 16,
+    flex: 1,
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 24,
     color: colors.white,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   disabledButton: {
     opacity: 0.5,
   },
   modalCancel: {
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    fontFamily: fonts.barlowCondensedSemiBold,
-    fontSize: 14,
-    color: colors.auth.placeholder,
-    letterSpacing: 1,
+    justifyContent: 'center',
   },
 });

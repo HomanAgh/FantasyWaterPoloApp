@@ -88,12 +88,16 @@ export async function getLeaderboardAroundUser(userId, context = 2) {
 /**
  * Create a private league. Creator is auto-joined.
  * @param {string} leagueName
- * @returns {Promise<{data: {id, name, invite_code}|null, error}>}
+ * @param {{ startFromNextRound?: boolean }} [options]
+ * @returns {Promise<{data: {id, name, invite_code, scoring_start_round_id, scoring_start_round_number}|null, error}>}
  */
-export async function createLeague(leagueName) {
+export async function createLeague(leagueName, options = {}) {
   try {
-    const { data, error } = await supabase
-      .rpc('create_league', { league_name: leagueName });
+    const { startFromNextRound = false } = options;
+    const { data, error } = await supabase.rpc('create_league', {
+      league_name: leagueName,
+      start_from_next_round: startFromNextRound,
+    });
 
     if (error) throw error;
 

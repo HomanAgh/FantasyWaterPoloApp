@@ -200,7 +200,7 @@ export default function PlayerDetailScreen({ route, navigation }) {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitleInline}>RECENT MATCHES</Text>
-              <Image source={Icons.swimmer} style={[styles.sectionHeaderIcon, styles.iconNeon]} />
+              <Image source={Icons.calendar} style={[styles.sectionHeaderIcon, styles.iconNeon]} />
             </View>
 
             {detail.recentMatches?.length > 0 ? (
@@ -263,7 +263,7 @@ function StatCell({ label, value, icon, danger }) {
     <View style={[styles.statCell, danger && styles.statCellDanger]}>
       <Image
         source={icon}
-        style={[styles.statCellIcon, styles.iconNeon, danger && styles.iconDanger]}
+        style={[styles.statCellIcon, styles.iconStat, danger && styles.iconDanger]}
       />
       <Text style={[styles.statCellValue, danger && styles.statCellDangerText]}>
         {value}
@@ -375,6 +375,9 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
 
+  iconStat: {
+    tintColor: colors.auth.statLabel,
+  },
   iconNeon: {
     tintColor: colors.auth.neon,
   },
@@ -522,7 +525,7 @@ const styles = StyleSheet.create({
     height: 88,
     borderRadius: 44,
     borderWidth: 3.5,
-    borderColor: colors.auth.neon,
+    borderColor: colors.auth.statLabel,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -535,7 +538,7 @@ const styles = StyleSheet.create({
   formLabel: {
     fontFamily: fonts.barlowCondensedMedium,
     fontSize: 13,
-    color: colors.white,
+    color: colors.auth.statLabel,
     letterSpacing: 0.5,
   },
 

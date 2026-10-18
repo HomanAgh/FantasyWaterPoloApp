@@ -6,6 +6,7 @@ import * as userTeamService from '../services/userTeamService';
 import * as playerRoundPointsService from '../services/playerRoundPointsService';
 import * as userProfileService from '../services/userProfileService';
 import * as transferService from '../services/transferService';
+import { showRewardedAd } from '../services/adsService';
 import * as userGwPicksService from '../services/userGwPicksService';
 import {
   calculatePositionOrder as calcPositionOrder,
@@ -56,6 +57,7 @@ export const TeamProvider = ({ children }) => {
 
   // Transfer state
   const [freeTransfers, setFreeTransfers] = useState(1);
+  const [unlockedFreeTransfers, setUnlockedFreeTransfers] = useState(0);
   const [lastTransferRoundId, setLastTransferRoundId] = useState(null);
   const [transfersMadeThisRound, setTransfersMadeThisRound] = useState(0);
   const [squadFinalized, setSquadFinalized] = useState(false);
@@ -81,6 +83,7 @@ export const TeamProvider = ({ children }) => {
       setCaptainId(null);
       setTeamName('My Team');
       setFreeTransfers(1);
+      setUnlockedFreeTransfers(0);
       setLastTransferRoundId(null);
       setTransfersMadeThisRound(0);
       setSquadFinalized(false);
@@ -119,6 +122,7 @@ export const TeamProvider = ({ children }) => {
       const { data, error } = await transferService.getTransferState(userIdParam);
       if (error || !data) return;
       setFreeTransfers(data.freeTransfers);
+      setUnlockedFreeTransfers(data.unlockedFreeTransfers ?? 0);
       setLastTransferRoundId(data.lastTransferRoundId);
       setTransfersMadeThisRound(data.transfersMadeThisRound);
       setSquadFinalized(data.squadFinalized);
@@ -308,6 +312,7 @@ export const TeamProvider = ({ children }) => {
             setSquadFinalized(true);
             setLastTransferRoundId(currentRound.id);
             setFreeTransfers(1);
+            setUnlockedFreeTransfers(0);
             setTransfersMadeThisRound(0);
             setPendingDeductions(0);
             await loadLockedTotalPoints(userId);
@@ -331,6 +336,7 @@ export const TeamProvider = ({ children }) => {
         const result = await transferService.processRoundRollover(userId, currentRound.id);
         if (!result.error && result.data) {
           setFreeTransfers(result.data.free_transfers);
+          setUnlockedFreeTransfers(result.data.unlocked_free_transfers ?? 0);
           setTransfersMadeThisRound(0);
           setPendingDeductions(0);
           setLastTransferRoundId(currentRound.id);
@@ -914,16 +920,11 @@ export const TeamProvider = ({ children }) => {
     }
 
     // Record the transfer and update local state
-    const transferResult = await transferService.recordTransfer(
-      userId,
-      freeTransfers,
-      pendingDeductions,
-      transfersMadeThisRound,
-      currentRound?.id
-    );
+    const transferResult = await transferService.recordTransfer(userId, currentRound?.id);
 
     if (!transferResult.error && transferResult.data) {
       setFreeTransfers(transferResult.data.free_transfers);
+      setUnlockedFreeTransfers(transferResult.data.unlocked_free_transfers ?? 0);
       setPendingDeductions(transferResult.data.pending_deductions);
       setTransfersMadeThisRound(transferResult.data.transfers_made_this_round);
     }
@@ -933,6 +934,55 @@ export const TeamProvider = ({ children }) => {
       error: null,
       usesFreeTransfer: transferResult.usesFreeTransfer ?? true,
       pointCost: transferResult.pointCost ?? 0,
+    };
+  };
+
+  /**
+   * Watch a rewarded ad to unlock one banked free transfer for this gameweek.
+   */
+  const unlockFreeTransferFromAd = async () => {
+    if (isUnlimitedPhase) {
+      return { success: false, error: 'Not available during squad building.' };
+    }
+    if (isLocked) {
+      return { success: false, error: 'Transfers are locked.' };
+    }
+    if (freeTransfers <= 0) {
+      return { success: false, error: 'No free transfers banked.' };
+    }
+    if (unlockedFreeTransfers >= freeTransfers) {
+      return { success: false, error: 'All banked free transfers are already unlocked.' };
+    }
+
+    const adResult = await showRewardedAd();
+    if (adResult.error) {
+      Alert.alert('Ad Error', adResult.error);
+      return { success: false, error: adResult.error };
+    }
+    if (!adResult.rewarded) {
+      Alert.alert('Ad Not Completed', 'Watch the full ad to unlock a free transfer.');
+      return { success: false, error: 'Ad not completed' };
+    }
+
+    const unlockResult = await transferService.unlockFreeTransfer(userId);
+    if (unlockResult.error || !unlockResult.data) {
+      Alert.alert(
+        'Unlock Failed',
+        unlockResult.error?.message || 'Could not unlock free transfer. Please try again.'
+      );
+      return { success: false, error: unlockResult.error };
+    }
+
+    const nextFree = unlockResult.data.free_transfers;
+    const nextUnlocked = unlockResult.data.unlocked_free_transfers ?? 0;
+    setFreeTransfers(nextFree);
+    setUnlockedFreeTransfers(nextUnlocked);
+
+    return {
+      success: true,
+      error: null,
+      freeTransfers: nextFree,
+      unlockedFreeTransfers: nextUnlocked,
     };
   };
 
@@ -1298,6 +1348,7 @@ export const TeamProvider = ({ children }) => {
 
     // Transfer state
     freeTransfers,
+    unlockedFreeTransfers,
     transfersMadeThisRound,
     pendingDeductions,
     squadFinalized,
@@ -1318,6 +1369,7 @@ export const TeamProvider = ({ children }) => {
     addPlayer,
     removePlayer,
     makeTransfer,
+    unlockFreeTransferFromAd,
     setPlayerAsStarter,
     swapPlayers,
     reorderOutfieldSubs,

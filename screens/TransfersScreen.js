@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Modal,
   Alert,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
 import { colors, borderRadius, spacing, fonts } from '../styles/theme';
@@ -15,10 +16,12 @@ import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
 import PitchView from '../components/PitchView';
 import { startReplaceSession } from '../utils/transferReplaceSession';
+import { preloadRewardedAd } from '../services/adsService';
 
 export default function TransfersScreen({ navigation }) {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [isUnlockingAd, setIsUnlockingAd] = useState(false);
 
   const {
     selectedPlayers,
@@ -30,6 +33,8 @@ export default function TransfersScreen({ navigation }) {
     outfieldCount,
     STARTING_BUDGET,
     freeTransfers,
+    unlockedFreeTransfers,
+    unlockFreeTransferFromAd,
     transfersMadeThisRound,
     isUnlimitedPhase,
     MAX_PLAYERS,
@@ -38,6 +43,17 @@ export default function TransfersScreen({ navigation }) {
   } = useTeam();
 
   const { currentRound, isLocked, timeToDeadline, formatDeadline } = useRound();
+
+  const canUnlockMore =
+    !isUnlimitedPhase && !isLocked && freeTransfers > unlockedFreeTransfers;
+
+  useEffect(() => {
+    if (!isUnlimitedPhase && !isLocked) {
+      preloadRewardedAd().catch(() => {
+        // Consent-gated; ignore preload failures
+      });
+    }
+  }, [isUnlimitedPhase, isLocked]);
 
   const handlePlayerPress = (playerId, player) => {
     if (isLocked) return;
@@ -116,8 +132,31 @@ export default function TransfersScreen({ navigation }) {
 
   const getFreeTransfersText = () => {
     if (isUnlimitedPhase) return 'Unlimited';
-    const maxNote = freeTransfers === 2 ? ' (Max)' : '';
-    return `${freeTransfers} FREE TRANSFERS${maxNote}`;
+    if (freeTransfers === 0) return '0 FREE TRANSFERS';
+    return `FREE TRANSFER ${unlockedFreeTransfers}/${freeTransfers}`;
+  };
+
+  const handleUnlockFreeTransfer = () => {
+    if (!canUnlockMore || isUnlockingAd) return;
+
+    Alert.alert(
+      'Unlock Free Transfer?',
+      'Watch a short ad to unlock 1 free transfer for this gameweek.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Watch Ad',
+          onPress: async () => {
+            setIsUnlockingAd(true);
+            try {
+              await unlockFreeTransferFromAd();
+            } finally {
+              setIsUnlockingAd(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -153,6 +192,10 @@ export default function TransfersScreen({ navigation }) {
                 styles.infoBadge,
                 styles.transferInfoBadge,
                 !isUnlimitedPhase && freeTransfers === 0 && styles.transferInfoWarning,
+                !isUnlimitedPhase &&
+                  freeTransfers > 0 &&
+                  unlockedFreeTransfers > 0 &&
+                  styles.transferInfoReady,
               ]}
             >
               <Text style={styles.transferInfoText} numberOfLines={2}>
@@ -160,7 +203,7 @@ export default function TransfersScreen({ navigation }) {
               </Text>
             </View>
 
-            {!isUnlimitedPhase && transfersMadeThisRound > 0 && (
+            {!isUnlimitedPhase && (
               <View style={[styles.infoBadge, styles.transfersMadeBadge]}>
                 <Text style={styles.transfersMadeText} numberOfLines={2}>
                   {transfersMadeThisRound} MADE THIS GW
@@ -180,6 +223,34 @@ export default function TransfersScreen({ navigation }) {
               </View>
             )}
           </View>
+
+          {canUnlockMore && (
+            <View style={styles.unlockButtonRow}>
+              <TouchableOpacity
+                style={[
+                  styles.outlineButton,
+                  styles.unlockButton,
+                  isUnlockingAd && styles.unlockButtonDisabled,
+                ]}
+                onPress={handleUnlockFreeTransfer}
+                disabled={isUnlockingAd}
+                activeOpacity={0.8}
+              >
+                {isUnlockingAd ? (
+                  <ActivityIndicator color={colors.auth.neon} size="small" />
+                ) : (
+                  <>
+                    <Image
+                      source={Icons.plus}
+                      style={[styles.outlineButtonIcon, styles.iconNeon]}
+                    />
+                    <Text style={styles.outlineButtonText}>UNLOCK FREE TRANSFER</Text>
+                    <Text style={styles.chevron}>›</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
 
         </View>
       </View>
@@ -210,15 +281,6 @@ export default function TransfersScreen({ navigation }) {
               {outfieldCount < MAX_OUTFIELD && `Need ${MAX_OUTFIELD - outfieldCount} more Outfield`}
             </Text>
           </View>
-        </View>
-      )}
-
-      {/* ── Transfer hint ── */}
-      {!isLocked && selectedPlayers.length > 0 && (
-        <View style={styles.hintBanner}>
-          <Text style={styles.hintText}>
-            Hint: press the player you want to transfer out
-          </Text>
         </View>
       )}
 
@@ -327,45 +389,59 @@ export default function TransfersScreen({ navigation }) {
 
                 <View style={styles.modalActions}>
                   <TouchableOpacity
-                    style={[styles.modalButton, styles.modalButtonPrimary]}
+                    style={styles.outlineButton}
                     onPress={handleReplacePlayer}
                     activeOpacity={0.8}
                   >
-                    <Image source={Icons.swap} style={styles.modalButtonIcon} />
-                    <Text style={styles.modalButtonText}>Replace player</Text>
+                    <Image
+                      source={Icons.swap}
+                      style={[styles.outlineButtonIcon, styles.iconNeon]}
+                    />
+                    <Text style={styles.outlineButtonText}>REPLACE PLAYER</Text>
+                    <Text style={styles.chevron}>›</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.modalButton, styles.modalButtonSecondary]}
+                    style={styles.outlineButton}
                     onPress={handleViewStats}
                     activeOpacity={0.8}
                   >
-                    <Image source={Icons.graph} style={styles.modalButtonIcon} />
-                    <Text style={styles.modalButtonText}>View stats</Text>
+                    <Image
+                      source={Icons.graph}
+                      style={[styles.outlineButtonIcon, styles.iconNeon]}
+                    />
+                    <Text style={styles.outlineButtonText}>VIEW STATS</Text>
+                    <Text style={styles.chevron}>›</Text>
                   </TouchableOpacity>
 
                   {isUnlimitedPhase && (
                     <TouchableOpacity
-                      style={[styles.modalButton, styles.modalButtonDanger]}
+                      style={[styles.outlineButton, styles.outlineButtonDanger]}
                       onPress={handleRemovePlayer}
                       activeOpacity={0.8}
                     >
-                      <Image source={Icons.warning} style={styles.modalButtonIcon} />
-                      <View style={styles.modalButtonTextContainer}>
-                        <Text style={styles.modalButtonTextDanger}>REMOVE FROM TEAM</Text>
-                        <Text style={styles.modalButtonSubtextDanger}>
+                      <Image
+                        source={Icons.warning}
+                        style={[styles.outlineButtonIcon, styles.iconCoral]}
+                      />
+                      <View style={styles.outlineButtonTextContainer}>
+                        <Text style={styles.outlineButtonTextDanger}>REMOVE FROM TEAM</Text>
+                        <Text style={styles.outlineButtonSubtextDanger}>
                           Free up ${selectedPlayer.price.toFixed(1)}M
                         </Text>
                       </View>
+                      <Text style={[styles.chevron, styles.chevronDanger]}>›</Text>
                     </TouchableOpacity>
                   )}
 
                   <TouchableOpacity
-                    style={[styles.modalButton, styles.modalButtonCancel]}
+                    style={styles.outlineButton}
                     onPress={handleCloseModal}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.modalButtonTextCancel}>CANCEL</Text>
+                    <View style={styles.outlineButtonIconSpacer} />
+                    <Text style={styles.outlineButtonText}>CANCEL</Text>
+                    <Text style={styles.chevron}>›</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -439,6 +515,23 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     gap: spacing.sm,
     width: '100%',
+  },
+  transferInfoReady: {
+    borderColor: colors.sand,
+  },
+  unlockButtonRow: {
+    marginTop: spacing.sm,
+    width: '100%',
+  },
+  unlockButton: {
+    width: '85%',
+    marginTop: 0,
+    justifyContent: 'center',
+    minHeight: 52,
+    backgroundColor: colors.auth.glass
+  },
+  unlockButtonDisabled: {
+    opacity: 0.6,
   },
   infoBadge: {
     flex: 1,
@@ -526,26 +619,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlowCondensedRegular,
     fontSize: 16,
     color: colors.white,
-  },
-
-  hintBanner: {
-    backgroundColor: colors.auth.inputBg,
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.medium,
-    borderWidth: 0.5,
-    borderColor: colors.auth.neonSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  hintText: {
-    fontFamily: fonts.barlowCondensedSemiBold,
-    fontSize: 14,
-    color: colors.white,
-    letterSpacing: 0.3,
-    textAlign: 'center',
   },
 
   statusBanner: {
@@ -721,65 +794,66 @@ const styles = StyleSheet.create({
   modalActions: {
     gap: spacing.sm,
   },
-  modalButton: {
+  outlineButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
     borderWidth: 0.5,
-  },
-  modalButtonPrimary: {
-    backgroundColor: colors.auth.glass,
     borderColor: colors.auth.neon,
+    borderRadius: borderRadius.round,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
   },
-  modalButtonSecondary: {
-    backgroundColor: colors.auth.inputBg,
-    borderColor: colors.auth.neonSoft,
-  },
-  modalButtonDanger: {
-    backgroundColor: 'rgba(229, 57, 53, 0.12)',
+  outlineButtonDanger: {
     borderColor: colors.coral,
+    backgroundColor: 'rgba(229, 57, 53, 0.12)',
   },
-  modalButtonCancel: {
-    backgroundColor: 'transparent',
-    borderColor: 'transparent',
-    justifyContent: 'center',
-    marginTop: spacing.xs,
-  },
-  modalButtonIcon: {
-    width: 22,
-    height: 22,
+  outlineButtonIcon: {
+    width: 20,
+    height: 20,
     resizeMode: 'contain',
-    tintColor: colors.auth.neon,
+    marginRight: spacing.sm,
   },
-  modalButtonTextContainer: {
+  outlineButtonIconSpacer: {
+    width: 20,
+    marginRight: spacing.sm,
+  },
+  outlineButtonText: {
     flex: 1,
-  },
-  modalButtonText: {
-    fontFamily: fonts.barlowCondensedBold,
-    fontSize: 20,
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 24,
     color: colors.white,
     letterSpacing: 0.5,
   },
-  modalButtonTextDanger: {
-    fontFamily: fonts.barlowCondensedBold,
-    fontSize: 15,
+  outlineButtonTextContainer: {
+    flex: 1,
+  },
+  outlineButtonTextDanger: {
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 22,
     color: colors.coral,
     letterSpacing: 0.5,
   },
-  modalButtonSubtextDanger: {
+  outlineButtonSubtextDanger: {
     fontFamily: fonts.barlowCondensedRegular,
     fontSize: 12,
     color: colors.coral,
     opacity: 0.8,
     marginTop: 2,
   },
-  modalButtonTextCancel: {
-    fontFamily: fonts.barlowCondensedBold,
-    fontSize: 14,
-    color: colors.auth.placeholder,
-    textAlign: 'center',
-    letterSpacing: 1,
+  iconNeon: {
+    tintColor: colors.auth.neon,
+  },
+  iconCoral: {
+    tintColor: colors.coral,
+  },
+  chevron: {
+    fontSize: 28,
+    color: colors.auth.neon,
+    fontWeight: '300',
+    lineHeight: 28,
+    marginTop: -2,
+  },
+  chevronDanger: {
+    color: colors.coral,
   },
 });

@@ -15,6 +15,7 @@ const PitchView = ({
   onPlayerPress,
   onEmptySlotPress,
   isLocked = false,
+  compact = false,
 }) => {
   const starters = players.filter(p => p.isStarter);
   const substitutes = players.filter(p => !p.isStarter);
@@ -78,11 +79,14 @@ const PitchView = ({
 
     // Compact transfers pitch for 2 GK + 7 outfield: 2 / 3 / 3 / 1
     return (
-      <View style={styles.pitch}>
+      <View style={[styles.pitch, compact && styles.pitchCompact]}>
         <View style={styles.pitchInner}>
           <ScrollView
             style={styles.scroll}
-            contentContainerStyle={styles.contentContainer}
+            contentContainerStyle={[
+              styles.contentContainer,
+              compact && styles.contentContainerCompact,
+            ]}
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.compactRowTight}>
@@ -120,11 +124,14 @@ const PitchView = ({
   }
 
   return (
-    <View style={styles.pitch}>
+    <View style={[styles.pitch, compact && styles.pitchCompact]}>
       <View style={styles.pitchInner}>
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.contentContainer}
+          contentContainerStyle={[
+            styles.contentContainer,
+            compact && styles.contentContainerCompact,
+          ]}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.startersSection}>
@@ -187,6 +194,10 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: colors.auth.neon,
   },
+  // ViewTeam / scout: pull the frame up from the screen bottom
+  pitchCompact: {
+    marginBottom: spacing.xxl + 50,
+  },
   // Inner clip so players scroll under the frame without eating the border
   pitchInner: {
     flex: 1,
@@ -200,6 +211,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
     paddingBottom: spacing.xl,
+  },
+  contentContainerCompact: {
+    paddingVertical: spacing.sm,
+    paddingBottom: spacing.sm,
   },
   startersSection: {
     paddingBottom: spacing.sm,

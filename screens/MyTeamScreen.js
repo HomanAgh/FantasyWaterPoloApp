@@ -487,10 +487,12 @@ export default function MyTeamScreen({ navigation }) {
                       )}
                     </View>
                     <TouchableOpacity
-                      style={[styles.modalButton, styles.modalButtonCancel]}
+                      style={styles.outlineButton}
                       onPress={handleCloseModal}
                       activeOpacity={0.8}>
-                      <Text style={styles.modalButtonTextCancel}>Close</Text>
+                      <View style={styles.outlineButtonIconSpacer} />
+                      <Text style={styles.outlineButtonText}>CLOSE</Text>
+                      <Text style={styles.chevron}>›</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -498,28 +500,39 @@ export default function MyTeamScreen({ navigation }) {
                   <View style={styles.modalActions}>
                     {selectedPlayer.isStarter && selectedPlayer.id !== captainId && (
                       <TouchableOpacity
-                        style={[styles.modalButton, styles.modalButtonCaptain]}
+                        style={styles.outlineButton}
                         onPress={handleSetCaptain}
                         activeOpacity={0.8}>
-                        <Image source={Icons.trophy} style={styles.modalButtonIcon} />
-                        <Text style={styles.modalButtonText}>Set as Captain</Text>
-                        <Text style={styles.modalButtonSubtext}>2× Points</Text>
+                        <Image
+                          source={Icons.trophy}
+                          style={[styles.outlineButtonIcon, styles.iconNeon]}
+                        />
+                        <Text style={styles.outlineButtonText}>SET AS CAPTAIN</Text>
+                        <Text style={styles.chevron}>›</Text>
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity
-                      style={[styles.modalButton, styles.modalButtonSwap]}
+                      style={styles.outlineButton}
                       onPress={handleShowSwapModal}
                       activeOpacity={0.8}>
-                      <Image source={Icons.swap} style={styles.modalButtonIcon} />
-                      <Text style={styles.modalButtonText}>
-                        {selectedPlayer.isStarter ? 'Swap with Substitute' : 'Swap with Starter'}
+                      <Image
+                        source={Icons.swap}
+                        style={[styles.outlineButtonIcon, styles.iconNeon]}
+                      />
+                      <Text style={styles.outlineButtonText}>
+                        {selectedPlayer.isStarter
+                          ? 'SWAP WITH SUBSTITUTE'
+                          : 'SWAP WITH STARTER'}
                       </Text>
+                      <Text style={styles.chevron}>›</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.modalButton, styles.modalButtonCancel]}
+                      style={styles.outlineButton}
                       onPress={handleCloseModal}
                       activeOpacity={0.8}>
-                      <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+                      <View style={styles.outlineButtonIconSpacer} />
+                      <Text style={styles.outlineButtonText}>CANCEL</Text>
+                      <Text style={styles.chevron}>›</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -583,13 +596,15 @@ export default function MyTeamScreen({ navigation }) {
                     ))}
                 </ScrollView>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  style={styles.outlineButton}
                   onPress={() => {
                     setSwapModalVisible(false);
                     setSelectedPlayer(null);
                   }}
                   activeOpacity={0.8}>
-                  <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+                  <View style={styles.outlineButtonIconSpacer} />
+                  <Text style={styles.outlineButtonText}>CANCEL</Text>
+                  <Text style={styles.chevron}>›</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -936,51 +951,44 @@ const styles = StyleSheet.create({
     color: colors.oceanDeep,
   },
   modalActions: {
-    gap: spacing.md,
+    gap: spacing.sm,
   },
-  modalButton: {
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
+  outlineButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
     borderWidth: 0.5,
-  },
-  modalButtonCaptain: {
-    backgroundColor: colors.sand + '22',
-    borderColor: colors.sand,
-  },
-  modalButtonSwap: {
-    backgroundColor: colors.auth.inputBg,
     borderColor: colors.auth.neon,
+    borderRadius: borderRadius.round,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
   },
-  modalButtonCancel: {
-    backgroundColor: 'transparent',
-    borderColor: colors.auth.placeholder,
-  },
-  modalButtonIcon: {
-    width: 22,
-    height: 22,
+  outlineButtonIcon: {
+    width: 20,
+    height: 20,
     resizeMode: 'contain',
-    tintColor: colors.white,
+    marginRight: spacing.sm,
   },
-  modalButtonText: {
-    fontFamily: fonts.barlowCondensedBold,
-    fontSize: 20,
+  // Matches icon width + margin so label-only buttons align with icon buttons
+  outlineButtonIconSpacer: {
+    width: 20,
+    marginRight: spacing.sm,
+  },
+  outlineButtonText: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 24,
     color: colors.white,
-    flex: 1,
+    letterSpacing: 0.5,
   },
-  modalButtonSubtext: {
-    fontFamily: fonts.barlowCondensedRegular,
-    fontSize: 20,
-    color: colors.sand,
+  iconNeon: {
+    tintColor: colors.auth.neon,
   },
-  modalButtonTextCancel: {
-    fontFamily: fonts.barlowCondensedBold,
-    fontSize: 20,
-    color: colors.auth.placeholder,
-    textAlign: 'center',
-    flex: 1,
+  chevron: {
+    fontSize: 28,
+    color: colors.auth.neon,
+    fontWeight: '300',
+    lineHeight: 28,
+    marginTop: -2,
   },
 
   historyPointsBox: {

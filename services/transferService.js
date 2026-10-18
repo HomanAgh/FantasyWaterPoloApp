@@ -11,7 +11,7 @@ export const getTransferState = async (userId) => {
     const { data, error } = await supabase
       .from('user_profiles')
       .select(
-        'free_transfers, last_transfer_round_id, transfers_made_this_round, squad_finalized, pending_deductions'
+        'free_transfers, unlocked_free_transfers, last_transfer_round_id, transfers_made_this_round, squad_finalized, pending_deductions'
       )
       .eq('user_id', userId)
       .maybeSingle();
@@ -21,6 +21,7 @@ export const getTransferState = async (userId) => {
     return {
       data: {
         freeTransfers: data?.free_transfers ?? 1,
+        unlockedFreeTransfers: data?.unlocked_free_transfers ?? 0,
         lastTransferRoundId: data?.last_transfer_round_id ?? null,
         transfersMadeThisRound: data?.transfers_made_this_round ?? 0,
         squadFinalized: data?.squad_finalized ?? false,
@@ -54,9 +55,10 @@ export const processRoundRollover = async (userId, currentRoundId) => {
         last_transfer_round_id: currentRoundId,
         transfers_made_this_round: 0,
         pending_deductions: 0,
+        unlocked_free_transfers: 0,
       })
       .eq('user_id', userId)
-      .select('free_transfers, transfers_made_this_round, pending_deductions')
+      .select('free_transfers, unlocked_free_transfers, transfers_made_this_round, pending_deductions')
       .single();
 
     if (error) throw error;
@@ -78,16 +80,53 @@ export const processRoundRollover = async (userId, currentRoundId) => {
  *      The leaderboard view subtracts all rows in user_round_deductions so the
  *      total is always accurate even after pending_deductions resets next GW.
  */
-export const recordTransfer = async (
-  userId,
-  currentFreeTransfers,
-  currentDeductions,
-  currentTransfersMade,
-  roundId
-) => {
+/**
+ * Unlock one banked free transfer after a rewarded ad (client must only call after ad reward).
+ */
+export const unlockFreeTransfer = async (userId) => {
   try {
-    const usesFreeTransfer = currentFreeTransfers > 0;
+    const { data: currentState, error: readError } = await getTransferState(userId);
+    if (readError) throw readError;
+
+    const banked = currentState?.freeTransfers ?? 0;
+    const unlocked = currentState?.unlockedFreeTransfers ?? 0;
+
+    if (banked <= 0) {
+      return { data: null, error: new Error('No free transfers banked.') };
+    }
+    if (unlocked >= banked) {
+      return { data: null, error: new Error('All banked free transfers are already unlocked.') };
+    }
+
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .update({ unlocked_free_transfers: unlocked + 1 })
+      .eq('user_id', userId)
+      .select('free_transfers, unlocked_free_transfers')
+      .single();
+
+    if (error) throw error;
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error unlocking free transfer:', error);
+    return { data: null, error };
+  }
+};
+
+export const recordTransfer = async (userId, roundId) => {
+  try {
+    const { data: currentState, error: readError } = await getTransferState(userId);
+    if (readError) throw readError;
+
+    const currentFreeTransfers = currentState?.freeTransfers ?? 0;
+    const currentUnlocked = currentState?.unlockedFreeTransfers ?? 0;
+    const currentDeductions = currentState?.pendingDeductions ?? 0;
+    const currentTransfersMade = currentState?.transfersMadeThisRound ?? 0;
+
+    const usesFreeTransfer = currentUnlocked > 0 && currentFreeTransfers > 0;
     const newFreeTransfers = usesFreeTransfer ? currentFreeTransfers - 1 : currentFreeTransfers;
+    const newUnlocked = usesFreeTransfer ? currentUnlocked - 1 : currentUnlocked;
     const newDeductions = usesFreeTransfer
       ? currentDeductions
       : currentDeductions + POINT_COST_PER_EXTRA_TRANSFER;
@@ -96,11 +135,12 @@ export const recordTransfer = async (
       .from('user_profiles')
       .update({
         free_transfers: newFreeTransfers,
+        unlocked_free_transfers: newUnlocked,
         pending_deductions: newDeductions,
         transfers_made_this_round: currentTransfersMade + 1,
       })
       .eq('user_id', userId)
-      .select('free_transfers, pending_deductions, transfers_made_this_round')
+      .select('free_transfers, unlocked_free_transfers, pending_deductions, transfers_made_this_round')
       .single();
 
     if (error) throw error;
@@ -144,6 +184,7 @@ export const finalizeSquad = async (userId, currentRoundId) => {
         squad_finalized: true,
         last_transfer_round_id: currentRoundId,
         free_transfers: 1,
+        unlocked_free_transfers: 0,
         transfers_made_this_round: 0,
         pending_deductions: 0,
       })

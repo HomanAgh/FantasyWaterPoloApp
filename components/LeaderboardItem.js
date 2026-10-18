@@ -23,20 +23,13 @@ export default function LeaderboardItem({
         <Text style={styles.rank}>{entry.rank}</Text>
       </View>
       <View style={styles.leaderboardInfo}>
-        <Text style={[styles.leaderboardName, isCurrentUser && styles.currentUserName]}>
+        <Text
+          style={[styles.leaderboardName, isCurrentUser && styles.currentUserName]}
+          numberOfLines={1}
+        >
           {entry.team_name}
           {isCurrentUser && ' (You)'}
         </Text>
-        <View style={styles.leaderboardMeta}>
-          <View style={styles.pointsContainer}>
-            <Text style={styles.leaderboardPoints}>{entry.total_points} PTS</Text>
-          </View>
-          {entry.gameweeks_played > 0 && (
-            <Text style={styles.gameweeksText}>
-              {entry.gameweeks_played} GW{entry.gameweeks_played !== 1 ? 'S' : ''}
-            </Text>
-          )}
-        </View>
       </View>
     </>
   );
@@ -61,23 +54,29 @@ export default function LeaderboardItem({
         <View style={styles.mainPressable}>{main}</View>
       )}
 
-      {onViewTeam ? (
-        <TouchableOpacity
-          style={styles.viewButton}
-          onPress={onViewTeam}
-          hitSlop={8}
-          activeOpacity={0.7}
-          accessibilityLabel={`View ${entry.team_name}`}
-        >
-          <Image source={Icons.teameye} style={styles.viewIcon} />
-        </TouchableOpacity>
-      ) : null}
+      <View style={styles.trailingActions}>
+        <View style={styles.pointsContainer}>
+          <Text style={styles.leaderboardPoints}>{entry.total_points} PTS</Text>
+        </View>
 
-      {onKick ? (
-        <TouchableOpacity style={styles.kickButton} onPress={onKick} hitSlop={8}>
-          <Text style={styles.kickButtonText}>KICK</Text>
-        </TouchableOpacity>
-      ) : null}
+        {onViewTeam ? (
+          <TouchableOpacity
+            style={styles.viewButton}
+            onPress={onViewTeam}
+            hitSlop={8}
+            activeOpacity={0.7}
+            accessibilityLabel={`View ${entry.team_name}`}
+          >
+            <Image source={Icons.teameye} style={styles.viewIcon} />
+          </TouchableOpacity>
+        ) : null}
+
+        {onKick ? (
+          <TouchableOpacity style={styles.kickButton} onPress={onKick} hitSlop={8}>
+            <Text style={styles.kickButtonText}>KICK</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -140,15 +139,16 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlowCondensedSemiBold,
     fontSize: 18,
     color: colors.white,
-    marginBottom: 2,
   },
   currentUserName: {
     color: colors.white,
     fontFamily: fonts.barlowCondensedSemiBold,
   },
-  leaderboardMeta: {
+  // Gap between points / eye / kick — tweak this
+  trailingActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginLeft: spacing.sm,
     gap: spacing.sm,
   },
   pointsContainer: {
@@ -160,16 +160,10 @@ const styles = StyleSheet.create({
   },
   leaderboardPoints: {
     fontFamily: fonts.barlowCondensedBold,
-    fontSize: 13,
+    fontSize: 16,
     color: colors.sand,
   },
-  gameweeksText: {
-    fontFamily: fonts.barlowCondensedRegular,
-    fontSize: 12,
-    color: colors.auth.placeholder,
-  },
   viewButton: {
-    marginLeft: spacing.sm,
     width: 36,
     height: 36,
     borderRadius: borderRadius.small,
@@ -186,7 +180,6 @@ const styles = StyleSheet.create({
     tintColor: colors.auth.neon,
   },
   kickButton: {
-    marginLeft: spacing.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.small,

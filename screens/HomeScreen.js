@@ -434,6 +434,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: colors.sand,
     borderRadius: borderRadius.medium,
+    backgroundColor: colors.auth.glass
   },
   gameweekLabel: {
     fontFamily: fonts.barlowCondensedExtraBold,
@@ -542,7 +543,7 @@ const styles = StyleSheet.create({
     height: 140,
     borderRadius: 70,
     borderWidth: 3.5,
-    borderColor: colors.auth.neon,
+    borderColor: colors.auth.statLabel,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.sm,
@@ -555,7 +556,7 @@ const styles = StyleSheet.create({
   pointsCircleLabel: {
     fontFamily: fonts.barlowCondensedMedium,
     fontSize: 12,
-    color: colors.auth.neon,
+    color: colors.auth.statLabel,
     letterSpacing: 1,
     marginBottom: 2,
   },
@@ -568,7 +569,7 @@ const styles = StyleSheet.create({
   historyHint: {
     fontFamily: fonts.barlowCondensedMedium,
     fontSize: 12,
-    color: colors.auth.neon,
+    color: colors.auth.statLabel,
     letterSpacing: 0.5,
     marginTop: 4,
     textAlign: 'center',

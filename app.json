@@ -1,10 +1,14 @@
 {
   "name": "FantasyWaterPoloApp",
   "displayName": "Fantasy Water Polo",
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-5616032972593206~1617481729",
+    "ios_app_id": "ca-app-pub-3940256099942544~1458002511"
+  },
   "expo": {
     "name": "Fantasy Water Polo",
     "slug": "fantasy-water-polo",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -18,8 +22,8 @@
       }
     },
     "android": {
-      "package": "com.fantasywaterpolo.app",
-      "versionCode": 5
+      "package": "com.fantasywaterpoloapp",
+      "versionCode": 6
     },
     "extra": {
       "eas": {

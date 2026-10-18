@@ -19,6 +19,12 @@ import {
   scorePicksWithAutoSub,
 } from '../services/userGwPicksService';
 import supabase from '../config/supabaseClient';
+import { useAuth } from '../context/AuthContext';
+import {
+  formatScoutRemaining,
+  getScoutAccessRemainingMs,
+  hasScoutAccess,
+} from '../services/scoutAccessService';
 
 /**
  * Read-only pitch view of another manager's (or your own) locked GW squad.
@@ -26,6 +32,8 @@ import supabase from '../config/supabaseClient';
  */
 export default function ViewTeamScreen({ route, navigation }) {
   const { userId: targetUserId, teamName } = route.params || {};
+  const { userId: viewerId } = useAuth();
+  const isOwnTeam = !!viewerId && targetUserId === viewerId;
 
   const [rounds, setRounds] = useState([]);
   const [selectedGwId, setSelectedGwId] = useState(null);
@@ -37,17 +45,12 @@ export default function ViewTeamScreen({ route, navigation }) {
   const [loadingRounds, setLoadingRounds] = useState(true);
   const [loadingGw, setLoadingGw] = useState(false);
   const [error, setError] = useState(null);
+  const [accessChecked, setAccessChecked] = useState(false);
+  const [hasAccess, setHasAccess] = useState(false);
+  const [scoutRemainingLabel, setScoutRemainingLabel] = useState(null);
 
-  useEffect(() => {
-    if (!targetUserId) {
-      setError('Missing team');
-      setLoadingRounds(false);
-      return;
-    }
-    loadRounds();
-  }, [targetUserId]);
-
-  const loadRounds = async () => {
+  const loadRounds = useCallback(async () => {
+    if (!targetUserId) return;
     setLoadingRounds(true);
     setError(null);
 
@@ -75,12 +78,93 @@ export default function ViewTeamScreen({ route, navigation }) {
     }
 
     setLoadingRounds(false);
-  };
+  }, [targetUserId]);
 
   useEffect(() => {
-    if (!selectedGwId || !targetUserId) return;
-    loadHistoryForRound(selectedGwId);
-  }, [selectedGwId, targetUserId]);
+    let cancelled = false;
+
+    const gateAndLoad = async () => {
+      setAccessChecked(false);
+      setHasAccess(false);
+      setError(null);
+      setLoadingRounds(true);
+
+      if (!targetUserId) {
+        if (cancelled) return;
+        setError('Missing team');
+        setLoadingRounds(false);
+        setAccessChecked(true);
+        return;
+      }
+
+      if (isOwnTeam) {
+        if (cancelled) return;
+        setHasAccess(true);
+        setAccessChecked(true);
+        await loadRounds();
+        return;
+      }
+
+      const allowed = await hasScoutAccess();
+      if (cancelled) return;
+
+      setAccessChecked(true);
+      if (!allowed) {
+        setHasAccess(false);
+        setLoadingRounds(false);
+        setError('Scout access expired');
+        return;
+      }
+
+      setHasAccess(true);
+      await loadRounds();
+    };
+
+    gateAndLoad();
+    return () => {
+      cancelled = true;
+    };
+  }, [targetUserId, isOwnTeam, loadRounds]);
+
+  useEffect(() => {
+    if (isOwnTeam || !hasAccess) {
+      setScoutRemainingLabel(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const tick = async () => {
+      const remaining = await getScoutAccessRemainingMs();
+      if (cancelled) return;
+      if (remaining <= 0) {
+        setScoutRemainingLabel(null);
+        setHasAccess(false);
+        setError('Scout access expired');
+        return;
+      }
+      setScoutRemainingLabel(formatScoutRemaining(remaining));
+    };
+
+    tick();
+    const id = setInterval(tick, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [isOwnTeam, hasAccess]);
+
+  const fetchPlayersByIds = async ids => {
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('players')
+        .select('id, name, position, price, points_total, teams(name)')
+        .in('id', ids);
+      if (fetchError) throw fetchError;
+      return { data: data || [] };
+    } catch {
+      return { data: [] };
+    }
+  };
 
   const loadHistoryForRound = useCallback(
     async roundId => {
@@ -152,22 +236,14 @@ export default function ViewTeamScreen({ route, navigation }) {
     [targetUserId, rounds]
   );
 
-  const fetchPlayersByIds = async ids => {
-    try {
-      const { data, error: fetchError } = await supabase
-        .from('players')
-        .select('id, name, position, price, points_total, teams(name)')
-        .in('id', ids);
-      if (fetchError) throw fetchError;
-      return { data: data || [] };
-    } catch {
-      return { data: [] };
-    }
-  };
+  useEffect(() => {
+    if (!selectedGwId || !targetUserId || !hasAccess) return;
+    loadHistoryForRound(selectedGwId);
+  }, [selectedGwId, targetUserId, hasAccess, loadHistoryForRound]);
 
   const title = (teamName || 'TEAM').toUpperCase();
 
-  if (loadingRounds) {
+  if (!accessChecked || loadingRounds) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -191,6 +267,7 @@ export default function ViewTeamScreen({ route, navigation }) {
   }
 
   if (error) {
+    const isExpired = error === 'Scout access expired';
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -208,13 +285,19 @@ export default function ViewTeamScreen({ route, navigation }) {
         <View style={styles.centered}>
           <Image source={Icons.warning} style={styles.emptyIcon} />
           <Text style={styles.emptyTitle}>{error.toUpperCase()}</Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={loadRounds}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.retryButtonText}>RETRY</Text>
-          </TouchableOpacity>
+          {isExpired ? (
+            <Text style={styles.emptySubtext}>
+              Watch another ad from the leagues{'\n'}leaderboard to keep scouting.
+            </Text>
+          ) : (
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={loadRounds}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.retryButtonText}>RETRY</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -259,6 +342,11 @@ export default function ViewTeamScreen({ route, navigation }) {
           {title}
         </Text>
         <Text style={styles.subtitle}>GW HISTORY</Text>
+        {!isOwnTeam && scoutRemainingLabel ? (
+          <Text style={styles.scoutBanner}>
+            SCOUTING ACTIVE · {scoutRemainingLabel.toUpperCase()} LEFT
+          </Text>
+        ) : null}
       </View>
 
       <View style={styles.gwPickerWrapper}>
@@ -319,6 +407,7 @@ export default function ViewTeamScreen({ route, navigation }) {
           captainId={captainId}
           mode="pickTeam"
           isLocked
+          compact
         />
       ) : (
         <View style={styles.centered}>
@@ -364,6 +453,14 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     textAlign: 'center',
     marginTop: spacing.xs,
+  },
+  scoutBanner: {
+    marginTop: spacing.sm,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 13,
+    color: colors.sand,
+    letterSpacing: 0.8,
+    textAlign: 'center',
   },
   gwPickerWrapper: {
     backgroundColor: 'transparent',

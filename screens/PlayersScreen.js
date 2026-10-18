@@ -115,6 +115,8 @@ export default function PlayersScreen({ navigation, route }) {
     remainingBudget,
     canAddPlayer,
     freeTransfers,
+    unlockedFreeTransfers,
+    unlockFreeTransferFromAd,
     pendingDeductions,
     isUnlimitedPhase,
     squadFinalized,
@@ -248,6 +250,67 @@ export default function PlayersScreen({ navigation, route }) {
     }
   };
 
+  const buildTransferSummary = (player) =>
+    `OUT  ${replacingPlayer.name}\n${replacingPlayer.team} • ${replacingPlayer.position} • $${replacingPlayer.price.toFixed(1)}M\n\nIN  ${player.name}\n${player.team} • ${player.position} • $${player.price.toFixed(1)}M`;
+
+  const confirmPaidTransfer = (player) => {
+    const totalAfter = pendingDeductions + 4;
+    Alert.alert(
+      '⚠️ Confirm Transfer (-4 pts)',
+      `${buildTransferSummary(player)}\n\nNo unlocked free transfers. This will cost -4 points.\nTotal point hit this GW: -${totalAfter} pts`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm (-4 pts)',
+          style: 'destructive',
+          onPress: () => executeTransfer(player),
+        },
+      ]
+    );
+  };
+
+  const confirmFreeTransfer = (player, transferState) => {
+    const bankedNow = transferState?.freeTransfers ?? freeTransfers;
+    const unlockedNow = transferState?.unlockedFreeTransfers ?? unlockedFreeTransfers;
+    const bankedAfter = bankedNow - 1;
+    const unlockedAfter = unlockedNow - 1;
+    Alert.alert(
+      '🔄 Confirm Transfer',
+      `${buildTransferSummary(player)}\n\nUses 1 unlocked free transfer (${unlockedAfter} unlocked left, ${bankedAfter} banked after).`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Confirm Transfer', onPress: () => executeTransfer(player) },
+      ]
+    );
+  };
+
+  const promptUnlockOrPaidTransfer = (player) => {
+    Alert.alert(
+      '🔒 Free Transfer Locked',
+      `${buildTransferSummary(player)}\n\nYou have ${freeTransfers} free transfer(s) banked but none unlocked.\n\nWatch a short ad to unlock one, or pay -4 pts for this swap.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Watch Ad to Unlock',
+          onPress: async () => {
+            const unlock = await unlockFreeTransferFromAd();
+            if (unlock.success) {
+              confirmFreeTransfer(player, {
+                freeTransfers: unlock.freeTransfers,
+                unlockedFreeTransfers: unlock.unlockedFreeTransfers,
+              });
+            }
+          },
+        },
+        {
+          text: 'Pay -4 pts',
+          style: 'destructive',
+          onPress: () => confirmPaidTransfer(player),
+        },
+      ]
+    );
+  };
+
   const handleAddPlayer = async (player) => {
     setErrorMessage('');
 
@@ -259,34 +322,17 @@ export default function PlayersScreen({ navigation, route }) {
         return;
       }
 
-      // Post-GW1: warn the user if this will cost points
-      if (freeTransfers === 0) {
-        const totalAfter = pendingDeductions + 4;
-        Alert.alert(
-          '⚠️ Confirm Transfer (-4 pts)',
-          `OUT  ${replacingPlayer.name}\n${replacingPlayer.team} • ${replacingPlayer.position} • $${replacingPlayer.price.toFixed(1)}M\n\nIN  ${player.name}\n${player.team} • ${player.position} • $${player.price.toFixed(1)}M\n\nNo free transfers remaining. This will cost -4 points.\nTotal point hit this GW: -${totalAfter} pts`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Confirm (-4 pts)',
-              style: 'destructive',
-              onPress: () => executeTransfer(player),
-            },
-          ]
-        );
+      if (unlockedFreeTransfers > 0) {
+        confirmFreeTransfer(player);
         return;
       }
 
-      // Has a free transfer — confirm before executing
-      const transfersAfter = freeTransfers - 1;
-      Alert.alert(
-        '🔄 Confirm Transfer',
-        `OUT  ${replacingPlayer.name}\n${replacingPlayer.team} • ${replacingPlayer.position} • $${replacingPlayer.price.toFixed(1)}M\n\nIN  ${player.name}\n${player.team} • ${player.position} • $${player.price.toFixed(1)}M\n\nUses 1 free transfer (${transfersAfter} remaining after).`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Confirm Transfer', onPress: () => executeTransfer(player) },
-        ]
-      );
+      if (freeTransfers > 0) {
+        promptUnlockOrPaidTransfer(player);
+        return;
+      }
+
+      confirmPaidTransfer(player);
       return;
     }
 

@@ -22,11 +22,18 @@ import {
   kickLeagueMember,
 } from '../services/leagueService';
 import { reportTeamName } from '../services/userProfileService';
+import { ensureScoutAccessThen } from '../services/scoutAccessService';
 
 const PAGE_SIZE = 50;
 
 export default function LeagueDetailScreen({ route, navigation }) {
-  const { leagueId, leagueName, inviteCode, createdBy } = route.params;
+  const {
+    leagueId,
+    leagueName,
+    inviteCode,
+    createdBy,
+    scoringStartRoundNumber = null,
+  } = route.params;
   const { userId } = useAuth();
 
   const isAdmin = createdBy === userId;
@@ -209,9 +216,13 @@ export default function LeagueDetailScreen({ route, navigation }) {
 
   const openViewTeam = (entry) => {
     if (!entry?.user_id) return;
-    navigation.navigate('ViewTeam', {
-      userId: entry.user_id,
-      teamName: entry.team_name,
+    ensureScoutAccessThen({
+      isOwnTeam: entry.user_id === userId,
+      navigate: () =>
+        navigation.navigate('ViewTeam', {
+          userId: entry.user_id,
+          teamName: entry.team_name,
+        }),
     });
   };
 
@@ -276,6 +287,11 @@ export default function LeagueDetailScreen({ route, navigation }) {
         <Text style={styles.subtitle}>
           {isAdmin ? 'PRIVATE LEAGUE · ADMIN' : 'PRIVATE LEAGUE'}
         </Text>
+        {scoringStartRoundNumber != null ? (
+          <Text style={styles.scoringBadge}>
+            SCORING FROM ROUND {scoringStartRoundNumber}
+          </Text>
+        ) : null}
       </View>
 
       {/* ── Invite Code ── */}
@@ -303,6 +319,11 @@ export default function LeagueDetailScreen({ route, navigation }) {
           <Text style={styles.cardTitle}>STANDINGS</Text>
           <Image source={Icons.trophy} style={[styles.cardHeaderIcon, styles.iconNeon]} />
         </View>
+        {scoringStartRoundNumber != null ? (
+          <Text style={styles.scoringStandingsHint}>
+            POINTS COUNT FROM ROUND {scoringStartRoundNumber} ONWARD
+          </Text>
+        ) : null}
 
         {loading && !refreshing ? (
           <View style={styles.loadingContainer}>
@@ -439,6 +460,14 @@ const styles = StyleSheet.create({
     color: colors.white,
     letterSpacing: 1.5,
     textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  scoringBadge: {
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 14,
+    color: colors.auth.neon,
+    letterSpacing: 1,
+    textAlign: 'center',
     marginBottom: spacing.md,
   },
 
@@ -532,6 +561,13 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     resizeMode: 'contain',
+  },
+  scoringStandingsHint: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 12,
+    color: colors.auth.neon,
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
   },
   reportHint: {
     fontFamily: fonts.barlowCondensedRegular,
