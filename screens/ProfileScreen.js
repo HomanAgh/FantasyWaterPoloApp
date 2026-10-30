@@ -11,7 +11,7 @@ import {
   Linking,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
-import { colors, borderRadius, spacing, fonts } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts, layout } from '../styles/theme';
 import { useAuth } from '../context/AuthContext';
 import { useTeam } from '../context/TeamContext';
 import { LEGAL_URLS } from '../utils/legalUrls';
@@ -386,6 +386,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: spacing.xl,
+    width: '100%',
+    maxWidth: layout.formMaxWidth,
+    alignSelf: 'center',
   },
 
   header: {

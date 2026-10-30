@@ -126,6 +126,13 @@ export const borderRadius = {
   round: 999,
 };
 
+/** Wide-screen / iPad caps so phone-first layouts do not stretch edge-to-edge. */
+export const layout = {
+  formMaxWidth: 440,
+  contentMaxWidth: 720,
+  pitchMaxWidth: 560,
+};
+
 // Custom fonts — load in App.js before first render (see @expo-google-fonts/barlow-condensed)
 export const fonts = {
   barlowCondensedRegular: 'BarlowCondensed_400Regular',

@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
-import { colors, borderRadius, spacing, fonts } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts, layout } from '../styles/theme';
 import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
 import { useAuth } from '../context/AuthContext';
@@ -629,6 +629,9 @@ const styles = StyleSheet.create({
   headerContent: {
     paddingHorizontal: spacing.md,
     alignItems: 'center',
+    width: '100%',
+    maxWidth: layout.contentMaxWidth,
+    alignSelf: 'center',
   },
   title: {
     fontFamily: fonts.barlowCondensedExtraBold,

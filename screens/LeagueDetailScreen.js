@@ -11,6 +11,7 @@ import {
   Share,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icons } from '../assets/images/icons';
 import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { useAuth } from '../context/AuthContext';
@@ -35,6 +36,7 @@ export default function LeagueDetailScreen({ route, navigation }) {
     scoringStartRoundNumber = null,
   } = route.params;
   const { userId } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const isAdmin = createdBy === userId;
 
@@ -261,7 +263,7 @@ export default function LeagueDetailScreen({ route, navigation }) {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={{ paddingBottom: spacing.xl + insets.bottom }}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
@@ -289,7 +291,7 @@ export default function LeagueDetailScreen({ route, navigation }) {
         </Text>
         {scoringStartRoundNumber != null ? (
           <Text style={styles.scoringBadge}>
-            SCORING FROM ROUND {scoringStartRoundNumber}
+            SCORING FROM GAMEWEEK {scoringStartRoundNumber}
           </Text>
         ) : null}
       </View>
@@ -321,7 +323,7 @@ export default function LeagueDetailScreen({ route, navigation }) {
         </View>
         {scoringStartRoundNumber != null ? (
           <Text style={styles.scoringStandingsHint}>
-            POINTS COUNT FROM ROUND {scoringStartRoundNumber} ONWARD
+            POINTS COUNT FROM GAMEWEEK {scoringStartRoundNumber} ONWARD
           </Text>
         ) : null}
 
@@ -375,7 +377,11 @@ export default function LeagueDetailScreen({ route, navigation }) {
             ))}
             {hasMore ? (
               <TouchableOpacity
-                style={[styles.loadMoreButton, loadingMore && styles.loadMoreButtonDisabled]}
+                style={[
+                  styles.outlineButton,
+                  styles.loadMoreButton,
+                  loadingMore && styles.loadMoreButtonDisabled,
+                ]}
                 onPress={loadMoreLeaderboard}
                 disabled={loadingMore}
                 activeOpacity={0.8}
@@ -383,7 +389,11 @@ export default function LeagueDetailScreen({ route, navigation }) {
                 {loadingMore ? (
                   <ActivityIndicator color={colors.auth.neon} />
                 ) : (
-                  <Text style={styles.loadMoreButtonText}>SHOW MORE</Text>
+                  <>
+                    <View style={styles.outlineButtonIconSpacer} />
+                    <Text style={styles.outlineButtonText}>SHOW MORE</Text>
+                    <Text style={styles.chevronDown}>›</Text>
+                  </>
                 )}
               </TouchableOpacity>
             ) : null}
@@ -401,9 +411,16 @@ export default function LeagueDetailScreen({ route, navigation }) {
             activeOpacity={0.8}
           >
             {actionLoading ? (
-              <ActivityIndicator color={colors.coral} />
+              <ActivityIndicator color={colors.white} />
             ) : (
-              <Text style={styles.leaveButtonText}>{leaveLabel}</Text>
+              <>
+                <Image
+                  source={Icons.warning}
+                  style={[styles.outlineButtonIcon, styles.iconCoral]}
+                />
+                <Text style={styles.leaveButtonText}>{leaveLabel}</Text>
+                <Text style={styles.leaveChevron}>›</Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
@@ -425,10 +442,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
   },
-  scrollContent: {
-    paddingBottom: spacing.xl,
-  },
-
   header: {
     paddingTop: 56,
     paddingBottom: spacing.md,
@@ -530,6 +543,18 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     marginTop: -2,
   },
+  chevronDown: {
+    fontSize: 28,
+    color: colors.auth.neon,
+    fontWeight: '300',
+    lineHeight: 28,
+    marginTop: -2,
+    transform: [{ rotate: '90deg' }],
+  },
+  outlineButtonIconSpacer: {
+    width: 20,
+    marginRight: spacing.sm,
+  },
 
   leaderboardCard: {
     marginHorizontal: spacing.md,
@@ -578,23 +603,9 @@ const styles = StyleSheet.create({
   },
   loadMoreButton: {
     marginTop: spacing.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: borderRadius.medium,
-    borderWidth: 0.5,
-    borderColor: colors.auth.neon,
-    backgroundColor: 'rgba(0, 174, 239, 0.08)',
-    minHeight: 44,
   },
   loadMoreButtonDisabled: {
     opacity: 0.7,
-  },
-  loadMoreButtonText: {
-    fontFamily: fonts.barlowCondensedBold,
-    fontSize: 14,
-    color: colors.auth.neon,
-    letterSpacing: 1,
   },
 
   loadingContainer: {
@@ -654,24 +665,37 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   leaveButton: {
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-    borderWidth: 0.5,
-    borderColor: colors.coral,
-    backgroundColor: 'rgba(229, 57, 53, 0.15)',
     marginTop: spacing.xl,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.round,
+    minHeight: 52,
+    justifyContent: 'center',
+    borderWidth: 0.5,
+    borderColor: colors.white,
+    backgroundColor: colors.coral,
   },
   leaveButtonDisabled: {
     opacity: 0.6,
   },
   leaveButtonText: {
-    fontFamily: fonts.barlowCondensedExtraBold,
-    fontSize: 16,
-    color: colors.coral,
-    letterSpacing: 1,
+    flex: 1,
+    fontFamily: fonts.barlowCondensedExtraBoldItalic,
+    fontSize: 22,
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+  leaveChevron: {
+    fontSize: 28,
+    color: colors.white,
+    fontWeight: '300',
+    lineHeight: 28,
+    marginTop: -2,
+  },
+  iconCoral: {
+    tintColor: colors.white,
   },
 
   adminHintCard: {

@@ -77,6 +77,11 @@ yarn-error.log
 
 # Supabase
 config/supabaseConfig.js
+supabase/.temp/
+
+# Local debug logs
+ump-log.txt
+
 
 # Sentry
 config/sentryConfig.js

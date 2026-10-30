@@ -187,38 +187,20 @@ export const getTimeToDeadline = (round) => {
 };
 
 /**
- * Format deadline for display
+ * Format deadline for display as a fixed date/time (never a countdown).
  * @param {string} deadline - ISO date string
  * @returns {string} - Formatted date/time string
  */
 export const formatDeadline = (deadline) => {
   if (!deadline) return '';
-  
+
   const date = new Date(deadline);
-  const now = new Date();
-  const diff = date - now;
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  
-  // If more than 24 hours away, show date
-  if (hours > 24) {
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  }
-  
-  // If less than 24 hours, show countdown
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  } else if (minutes > 0) {
-    return `${minutes}m`;
-  } else {
-    return 'Deadline passed';
-  }
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 };
 
 /**

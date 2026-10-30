@@ -12,7 +12,7 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
-import { colors, borderRadius, spacing, fonts } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts, layout } from '../styles/theme';
 import * as userProfileService from '../services/userProfileService';
 
 // Same Figma title export as AuthScreen — drop into assets/images/ then set:
@@ -159,6 +159,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xl,
+    width: '100%',
+    maxWidth: layout.formMaxWidth,
+    alignSelf: 'center',
   },
   hero: {
     width: '100%',
@@ -167,6 +170,7 @@ const styles = StyleSheet.create({
   },
   titleImage: {
     width: '100%',
+    maxWidth: layout.formMaxWidth,
     height: 180,
   },
   heroFallback: {

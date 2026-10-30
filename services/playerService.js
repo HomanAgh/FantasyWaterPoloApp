@@ -192,7 +192,7 @@ export const fetchPlayerDetail = async (playerId) => {
     const { data: matchStats, error: statsError } = await supabase
       .from('player_match_stats')
       .select(`
-        goals, assists, saves, penalty_saves, points_earned,
+        appeared, goals, assists, saves, penalty_saves, points_earned,
         red_cards, clean_sheets, blocks, sprints, steals, fouls_drawn,
         fixtures (
           id, match_date, status, home_score, away_score,
@@ -207,7 +207,7 @@ export const fetchPlayerDetail = async (playerId) => {
     if (statsError) throw statsError;
 
     const stats = matchStats || [];
-    const gamesPlayed = stats.length;
+    const gamesPlayed = stats.filter((r) => r.appeared === true).length;
     const totalGoals = stats.reduce((s, r) => s + (r.goals || 0), 0);
     const totalAssists = stats.reduce((s, r) => s + (r.assists || 0), 0);
     const totalSaves = stats.reduce((s, r) => s + (r.saves || 0), 0);

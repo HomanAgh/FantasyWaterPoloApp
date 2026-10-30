@@ -50,4 +50,5 @@ export const Icons = {
   whistle:    require('./whistle.png'),
   penaltysave:require('./penaltysave.png'),
   steals:     require('./steal.png'),
+  titleicon:  require('./goldenball.png'),
 };

@@ -11,7 +11,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
-import { colors, borderRadius, spacing, fonts } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts, layout } from '../styles/theme';
 import {
   fetchFixturesForRound,
   fetchTopPerformers,
@@ -282,7 +282,6 @@ export default function FixturesScreen() {
         {/* ── Header ── */}
         <View style={styles.header}>
           <Text style={styles.title}>FIXTURES</Text>
-          <Text style={styles.subtitle}>MATCH SCHEDULE AND RESULTS</Text>
         </View>
 
         {renderRoundTabs()}
@@ -315,6 +314,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: spacing.xl,
+    width: '100%',
+    maxWidth: layout.contentMaxWidth,
+    alignSelf: 'center',
   },
 
   header: {
@@ -329,14 +331,6 @@ const styles = StyleSheet.create({
     fontSize: 64,
     color: colors.white,
     letterSpacing: 1,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontFamily: fonts.barlowCondensedMedium,
-    fontSize: 16,
-    color: colors.white,
-    letterSpacing: 1.5,
-    marginTop: 4,
     textAlign: 'center',
     marginBottom: spacing.xl,
   },

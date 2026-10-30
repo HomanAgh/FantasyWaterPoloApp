@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import mobileAds, {
   AdEventType,
   MaxAdContentRating,
@@ -10,9 +11,15 @@ import {
   canRequestAdsNow,
   gatherAdsConsent,
 } from './adsConsentService';
+import {
+  ensureTrackingPermission,
+  shouldRequestNonPersonalizedAdsOnly,
+} from './attService';
 
 let initPromise = null;
 let rewardedAd = null;
+/** NPA flag used when the current RewardedAd instance was created. */
+let rewardedAdNpa = null;
 let isLoaded = false;
 let startAdsPromise = null;
 
@@ -20,7 +27,12 @@ function getRewardedAdUnitId() {
   if (__DEV__) {
     return TestIds.REWARDED;
   }
-  return PRODUCTION_REWARDED_AD_UNIT_ID || null;
+  if (PRODUCTION_REWARDED_AD_UNIT_ID) {
+    return PRODUCTION_REWARDED_AD_UNIT_ID;
+  }
+  // iOS unit not created yet: use Google's test unit so TestFlight builds can
+  // exercise the ad flow. Replace IOS_REWARDED_AD_UNIT_ID before App Store release.
+  return Platform.OS === 'ios' ? TestIds.REWARDED : null;
 }
 
 /**
@@ -55,8 +67,8 @@ export function initializeAds() {
 }
 
 /**
- * Gather UMP consent (if needed), then initialize the Mobile Ads SDK when
- * canRequestAds is true. Single-flight to avoid duplicate forms / init.
+ * UMP → ATT (iOS) → initialize Mobile Ads when canRequestAds.
+ * Single-flight to avoid duplicate forms / init.
  *
  * @param {{ preload?: boolean }} [options]
  */
@@ -84,6 +96,9 @@ export function startAdsIfAllowed(options = {}) {
         };
       }
 
+      // After GDPR/UMP, request ATT before any ad SDK init or load (iOS).
+      const att = await ensureTrackingPermission();
+
       const init = await initializeAds();
       if (!init.ok) {
         startAdsPromise = null;
@@ -92,6 +107,7 @@ export function startAdsIfAllowed(options = {}) {
           reason: init.reason || 'init_failed',
           canRequestAds: true,
           consent,
+          att,
         };
       }
 
@@ -99,6 +115,7 @@ export function startAdsIfAllowed(options = {}) {
         ok: true,
         canRequestAds: true,
         consent,
+        att,
       };
     })();
   }
@@ -123,9 +140,18 @@ function ensureRewardedInstance() {
   if (!unitId) {
     return null;
   }
+
+  // Personalized only when ATT granted (iOS). Android: NPA false (UMP gates).
+  const npa = shouldRequestNonPersonalizedAdsOnly();
+  if (rewardedAd && rewardedAdNpa !== npa) {
+    rewardedAd = null;
+    isLoaded = false;
+  }
+
   if (!rewardedAd) {
+    rewardedAdNpa = npa;
     rewardedAd = RewardedAd.createForAdRequest(unitId, {
-      requestNonPersonalizedAdsOnly: false,
+      requestNonPersonalizedAdsOnly: npa,
       keywords: ['sports', 'water polo', 'fantasy sports'],
     });
   }

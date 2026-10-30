@@ -15,8 +15,9 @@ import {
   Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icons } from '../assets/images/icons';
-import { colors, borderRadius, spacing, fonts } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts, layout } from '../styles/theme';
 import { useAuth } from '../context/AuthContext';
 import { useRound } from '../context/RoundContext';
 import LeaderboardItem from '../components/LeaderboardItem';
@@ -64,6 +65,7 @@ function validateInviteCode(code) {
 export default function LeaguesScreen({ navigation }) {
   const { userId } = useAuth();
   const { currentRound, isLocked } = useRound();
+  const insets = useSafeAreaInsets();
   const [leaderboard, setLeaderboard] = useState([]);
   const [myLeagues, setMyLeagues] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -323,7 +325,10 @@ export default function LeaguesScreen({ navigation }) {
     <>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: spacing.xl + insets.bottom },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -450,7 +455,11 @@ export default function LeaguesScreen({ navigation }) {
               ))}
               {hasMore ? (
                 <TouchableOpacity
-                  style={[styles.loadMoreButton, loadingMore && styles.loadMoreButtonDisabled]}
+                  style={[
+                    styles.outlineButton,
+                    styles.loadMoreButton,
+                    loadingMore && styles.loadMoreButtonDisabled,
+                  ]}
                   onPress={loadMoreLeaderboard}
                   disabled={loadingMore}
                   activeOpacity={0.8}
@@ -458,7 +467,11 @@ export default function LeaguesScreen({ navigation }) {
                   {loadingMore ? (
                     <ActivityIndicator color={colors.auth.neon} />
                   ) : (
-                    <Text style={styles.loadMoreButtonText}>SHOW MORE</Text>
+                    <>
+                      <View style={styles.outlineButtonIconSpacer} />
+                      <Text style={styles.outlineButtonText}>SHOW MORE</Text>
+                      <Text style={styles.chevronDown}>›</Text>
+                    </>
                   )}
                 </TouchableOpacity>
               ) : null}
@@ -665,7 +678,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   scrollContent: {
-    paddingBottom: spacing.xl,
+    width: '100%',
+    maxWidth: layout.contentMaxWidth,
+    alignSelf: 'center',
   },
 
   header: {
@@ -776,6 +791,14 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     marginTop: -2,
   },
+  chevronDown: {
+    fontSize: 28,
+    color: colors.auth.neon,
+    fontWeight: '300',
+    lineHeight: 28,
+    marginTop: -2,
+    transform: [{ rotate: '90deg' }],
+  },
   chevronOnFilled: {
     color: colors.white,
   },
@@ -872,23 +895,9 @@ const styles = StyleSheet.create({
   },
   loadMoreButton: {
     marginTop: spacing.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: borderRadius.medium,
-    borderWidth: 0.5,
-    borderColor: colors.auth.neon,
-    backgroundColor: 'rgba(0, 174, 239, 0.08)',
-    minHeight: 44,
   },
   loadMoreButtonDisabled: {
     opacity: 0.7,
-  },
-  loadMoreButtonText: {
-    fontFamily: fonts.barlowCondensedBold,
-    fontSize: 14,
-    color: colors.auth.neon,
-    letterSpacing: 1,
   },
 
   modalOverlay: {

@@ -2,8 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StatusBar, Image, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import {
+  StatusBar,
+  Image,
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+} from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+
+// iOS only: cap Dynamic Type so layout matches the designed (Android) sizes.
+// Android is left unchanged — system font scaling behaves as before.
+if (Platform.OS === 'ios') {
+  Text.defaultProps = Text.defaultProps ?? {};
+  Text.defaultProps.maxFontSizeMultiplier = 1.0;
+  TextInput.defaultProps = TextInput.defaultProps ?? {};
+  TextInput.defaultProps.maxFontSizeMultiplier = 1.0;
+}
 import * as Sentry from '@sentry/react-native';
 import {
   useFonts,
@@ -52,6 +70,7 @@ function TabLabel({ label, focused }) {
           { color: focused ? colors.sand : TAB_INACTIVE_LABEL },
         ]}
         numberOfLines={1}
+        maxFontSizeMultiplier={Platform.OS === 'ios' ? 1 : undefined}
       >
         {label}
       </Text>
@@ -408,7 +427,7 @@ export default Sentry.wrap(function App() {
     if (!fontsLoaded) {
       return;
     }
-    // UMP consent first; only init/preload when canRequestAds.
+    // UMP → ATT (iOS) → init/preload when canRequestAds.
     // __DEV__ uses TestIds.REWARDED (safe to click) + EEA debug geography.
     startAdsIfAllowed({ preload: true }).catch(() => {
       // Ads must never block app startup

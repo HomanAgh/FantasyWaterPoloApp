@@ -1,6 +1,6 @@
 import supabase from '../config/supabaseClient';
 
-const MAX_FREE_TRANSFERS = 2;
+const MAX_FREE_TRANSFERS = 3;
 const POINT_COST_PER_EXTRA_TRANSFER = 4;
 
 /**
@@ -36,7 +36,7 @@ export const getTransferState = async (userId) => {
 };
 
 /**
- * Award +1 free transfer (capped at MAX_FREE_TRANSFERS) when a new gameweek starts.
+ * Award free transfers up to MAX_FREE_TRANSFERS when a new gameweek starts.
  * Resets transfers_made_this_round and pending_deductions for the new GW.
  * Reads current free_transfers from DB directly to avoid stale-closure issues.
  */
@@ -46,7 +46,10 @@ export const processRoundRollover = async (userId, currentRoundId) => {
     if (readError) throw readError;
 
     const currentFreeTransfers = currentState?.freeTransfers ?? 1;
-    const newFreeTransfers = Math.min(currentFreeTransfers + 1, MAX_FREE_TRANSFERS);
+    const newFreeTransfers = Math.min(
+      currentFreeTransfers + MAX_FREE_TRANSFERS,
+      MAX_FREE_TRANSFERS
+    );
 
     const { data, error } = await supabase
       .from('user_profiles')
@@ -174,7 +177,7 @@ export const recordTransfer = async (userId, roundId) => {
 
 /**
  * Mark the squad as finalized after GW1 deadline passes.
- * Initialises free_transfers = 1 and anchors last_transfer_round_id to GW1.
+ * Initialises free_transfers to MAX_FREE_TRANSFERS and anchors last_transfer_round_id.
  */
 export const finalizeSquad = async (userId, currentRoundId) => {
   try {
@@ -183,7 +186,7 @@ export const finalizeSquad = async (userId, currentRoundId) => {
       .update({
         squad_finalized: true,
         last_transfer_round_id: currentRoundId,
-        free_transfers: 1,
+        free_transfers: MAX_FREE_TRANSFERS,
         unlocked_free_transfers: 0,
         transfers_made_this_round: 0,
         pending_deductions: 0,

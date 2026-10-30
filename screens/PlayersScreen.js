@@ -10,10 +10,11 @@ import {
   Modal,
   Alert,
   Image,
+  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Icons } from '../assets/images/icons';
-import { colors, borderRadius, spacing, fonts } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts, layout } from '../styles/theme';
 import { searchAndFilterPlayersWithStats } from '../services/playerService';
 import { fetchTeams } from '../services/teamService';
 import { useTeam } from '../context/TeamContext';
@@ -430,32 +431,63 @@ export default function PlayersScreen({ navigation, route }) {
           />
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.positionFilter}
-        >
-          {positions.map((pos) => (
-            <TouchableOpacity
-              key={pos}
-              style={[
-                styles.filterChip,
-                selectedPosition === pos && styles.filterChipActive,
-              ]}
-              onPress={() => setSelectedPosition(pos)}
-              activeOpacity={0.7}
-            >
-              <Text
+        {/* Android: horizontal scroll (unchanged). iOS: equal-width chips so labels stay on-screen. */}
+        {Platform.OS === 'ios' ? (
+          <View style={styles.positionFilter}>
+            {positions.map((pos) => (
+              <TouchableOpacity
+                key={pos}
                 style={[
-                  styles.filterChipText,
-                  selectedPosition === pos && styles.filterChipTextActive,
+                  styles.filterChip,
+                  styles.filterChipEqual,
+                  selectedPosition === pos && styles.filterChipActive,
                 ]}
+                onPress={() => setSelectedPosition(pos)}
+                activeOpacity={0.7}
               >
-                {pos === 'All' ? 'ALL' : pos === 'Goalkeeper' ? 'GOALKEEPER' : 'FIELD PLAYER'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    styles.filterChipTextIos,
+                    selectedPosition === pos && styles.filterChipTextActive,
+                  ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                >
+                  {pos === 'All' ? 'ALL' : pos === 'Goalkeeper' ? 'GOALKEEPER' : 'FIELD PLAYER'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.positionFilter}
+          >
+            {positions.map((pos) => (
+              <TouchableOpacity
+                key={pos}
+                style={[
+                  styles.filterChip,
+                  selectedPosition === pos && styles.filterChipActive,
+                ]}
+                onPress={() => setSelectedPosition(pos)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    selectedPosition === pos && styles.filterChipTextActive,
+                  ]}
+                >
+                  {pos === 'All' ? 'ALL' : pos === 'Goalkeeper' ? 'GOALKEEPER' : 'FIELD PLAYER'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         {/* Team Dropdown */}
         <TouchableOpacity
@@ -819,6 +851,9 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: spacing.xl,
+    width: '100%',
+    maxWidth: layout.contentMaxWidth,
+    alignSelf: 'center',
   },
 
   header: {
@@ -959,6 +994,13 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: colors.auth.neon,
   },
+  // iOS only — equal share of row width so "FIELD PLAYER" is not clipped
+  filterChipEqual: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+  },
   filterChipActive: {
     backgroundColor: colors.auth.glass,
     borderColor: colors.auth.neon,
@@ -973,6 +1015,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: colors.white,
     letterSpacing: 0.5,
+  },
+  // iOS only — smaller base size; Android keeps 24
+  filterChipTextIos: {
+    fontSize: 15,
+    letterSpacing: 0.2,
   },
   filterChipTextActive: {
     color: colors.white,

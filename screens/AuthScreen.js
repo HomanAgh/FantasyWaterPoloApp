@@ -14,7 +14,7 @@ import {
   Linking,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
-import { colors, borderRadius, spacing, fonts } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts, layout } from '../styles/theme';
 import { useAuth } from '../context/AuthContext';
 import { LEGAL_URLS } from '../utils/legalUrls';
 
@@ -177,13 +177,18 @@ const AuthScreen = ({ onNewUser }) => {
       );
     }
 
-    // Temporary fallback until Figma title PNG is dropped in
     return (
       <View style={styles.heroFallback}>
-        <Text style={styles.welcomeChip}>WELCOME TO</Text>
-        <Text style={styles.appTitle}>FANTASY{'\n'}WATER POLO</Text>
-        <View style={styles.ribbon}>
-          <Text style={styles.ribbonText}>DIVE INTO THE ACTION</Text>
+        <View style={styles.heroTitleRow}>
+          <View style={styles.appTitleWrap}>
+            <Text style={styles.appTitle}>FANTASY{'\n'}WATER POLO</Text>
+            <Text style={styles.heroTagline}>DIVE INTO THE ACTION</Text>
+          </View>
+          <Image
+            source={Icons.titleicon}
+            style={styles.heroBall}
+            resizeMode="contain"
+          />
         </View>
       </View>
     );
@@ -377,6 +382,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xl,
+    width: '100%',
+    maxWidth: layout.formMaxWidth,
+    alignSelf: 'center',
   },
   hero: {
     width: '100%',
@@ -385,46 +393,49 @@ const styles = StyleSheet.create({
   },
   titleImage: {
     width: '100%',
+    maxWidth: layout.formMaxWidth,
     height: 180,
   },
   heroFallback: {
     alignItems: 'center',
-    paddingTop: spacing.md,
+    width: '100%',
+    maxWidth: layout.formMaxWidth,
+    marginVertical: spacing.md,
   },
-  welcomeChip: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 2,
-    color: colors.white,
-    backgroundColor: colors.auth.buttonBottom,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    overflow: 'hidden',
-    marginBottom: spacing.sm,
+  heroTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroBall: {
+    width: 150,
+    height: 150,
+    marginLeft: -85,
+    marginTop: -65,
+    zIndex: 0,
+  },
+  appTitleWrap: {
+    zIndex: 1,
   },
   appTitle: {
     fontFamily: fonts.barlowCondensedExtraBold,
-    fontSize: 34,
+    fontSize: 60,
     color: colors.white,
-    textAlign: 'center',
-    lineHeight: 38,
+    textAlign: 'left',
+    lineHeight: 56,
     letterSpacing: 1,
     textShadowColor: colors.auth.neon,
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
+    textShadowRadius: 10,
   },
-  ribbon: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.sand,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 6,
-    transform: [{ rotate: '-2deg' }],
-  },
-  ribbonText: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1,
-    color: colors.oceanDeep,
+  heroTagline: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 18,
+    color: colors.sand,
+    letterSpacing: 2,
+    marginTop: spacing.xs,
+    textAlign: 'left',
+    marginLeft: spacing.sm,
   },
   tabs: {
     flexDirection: 'row',

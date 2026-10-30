@@ -9,15 +9,15 @@ import {
   Image,
 } from 'react-native';
 import { Icons } from '../assets/images/icons';
-import { colors, borderRadius, spacing, fonts } from '../styles/theme';
+import { colors, borderRadius, spacing, fonts, layout } from '../styles/theme';
 import { fetchPlayers } from '../services/playerService';
 import { fetchFixturesForRound } from '../services/fixtureService';
 import { fetchNextRound, getRoundStatus } from '../services/roundService';
 import { useTeam } from '../context/TeamContext';
 import { useRound } from '../context/RoundContext';
 
-// Same Figma title export as AuthScreen — drop into assets/images/ then set:
-const AUTH_TITLE = null; // require('../assets/images/auth-title.png')
+// Title logo — set to Icons.titleicon to use image instead of text hero
+const AUTH_TITLE = null;
 
 export default function HomeScreen({ navigation }) {
   const [playerCount, setPlayerCount] = useState(0);
@@ -138,9 +138,16 @@ export default function HomeScreen({ navigation }) {
 
     return (
       <View style={styles.heroFallback}>
-        <Text style={styles.appTitle}>FANTASY{'\n'}WATER POLO</Text>
-        <View style={styles.ribbon}>
-          <Text style={styles.ribbonText}>DIVE INTO THE ACTION</Text>
+        <View style={styles.heroTitleRow}>
+          <View style={styles.appTitleWrap}>
+            <Text style={styles.appTitle}>FANTASY{'\n'}WATER POLO</Text>
+            <Text style={styles.heroTagline}>DIVE INTO THE ACTION</Text>
+          </View>
+          <Image
+            source={Icons.titleicon}
+            style={styles.heroBall}
+            resizeMode="contain"
+          />
         </View>
       </View>
     );
@@ -172,7 +179,7 @@ export default function HomeScreen({ navigation }) {
           {!isLocked && timeToDeadline && (
             <View style={styles.countdownPill}>
               <Image source={Icons.clock} style={styles.countdownIcon} />
-              <Text style={styles.countdownText}>DEADLINE: {countdownLabel()}</Text>
+              <Text style={styles.countdownText}> COUNTDOWN: {countdownLabel()}</Text>
             </View>
           )}
         </View>
@@ -261,20 +268,17 @@ export default function HomeScreen({ navigation }) {
               </View>
             )}
 
-            {isTeamComplete && (
-              <View style={styles.successBox}>
-                <Text style={styles.successText}>✓ Team is complete!</Text>
-              </View>
-            )}
-
             <View style={styles.budgetBar}>
               <Text style={styles.budgetLabel}>BUDGET REMAINING:</Text>
               <Text style={styles.budgetAmount}>${remainingBudget.toFixed(1)}M</Text>
             </View>
 
-            <Text style={styles.cardInfo}>
-              Spent ${totalSpent.toFixed(1)}M of $100.0M. {playerCount} players available in the player pool.
-            </Text>
+            <View style={styles.cardInfoBlock}>
+              <Text style={styles.cardInfo}>Spent ${totalSpent.toFixed(1)}M of $100.0M</Text>
+              <Text style={styles.cardInfo}>
+                {playerCount} players available in database
+              </Text>
+            </View>
           </>
         )}
 
@@ -384,46 +388,61 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: spacing.xl,
+    width: '100%',
+    maxWidth: layout.contentMaxWidth,
+    alignSelf: 'center',
   },
   hero: {
     alignItems: 'center',
-    paddingTop: 52,
+    paddingTop: 120,
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    marginBottom: 10,
   },
   titleImage: {
     width: '100%',
-    height: 140,
+    maxWidth: layout.formMaxWidth,
+    height: 220,
   },
   heroFallback: {
     alignItems: 'center',
+    width: '100%',
+    maxWidth: layout.formMaxWidth,
+    marginVertical: spacing.md,
+  },
+  heroTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroBall: {
+    width: 150,
+    height: 150,
+    marginLeft: -85,
+    marginTop: -65,
+    zIndex: 0,
+  },
+  appTitleWrap: {
+    zIndex: 1,
   },
   appTitle: {
     fontFamily: fonts.barlowCondensedExtraBold,
-    fontSize: 34,
+    fontSize: 60,
     color: colors.white,
-    textAlign: 'center',
-    lineHeight: 38,
+    textAlign: 'left',
+    lineHeight: 56,
     letterSpacing: 1,
     textShadowColor: colors.auth.neon,
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
+    textShadowRadius: 10,
   },
-  ribbon: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.sand,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    transform: [{ rotate: '-2deg' }],
-  },
-  ribbonText: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1,
-    color: colors.oceanDeep,
+  heroTagline: {
+    fontFamily: fonts.barlowCondensedRegular,
+    fontSize: 18,
+    color: colors.sand,
+    letterSpacing: 2,
+    marginTop: spacing.xs,
+    textAlign: 'left',
+    marginLeft: spacing.sm,
   },
   gameweekBlock: {
     alignItems: 'center',
@@ -438,10 +457,10 @@ const styles = StyleSheet.create({
   },
   gameweekLabel: {
     fontFamily: fonts.barlowCondensedExtraBold,
-    fontSize: 22,
+    fontSize: 26,
     color: colors.sand,
     letterSpacing: 1,
-    marginBottom: spacing.xs,
+    marginBottom: 1,
   },
   deadlineRow: {
     flexDirection: 'row',
@@ -460,7 +479,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: colors.white,
     letterSpacing: 0.5,
-    marginBottom: spacing.xxs,
+    marginBottom: spacing.md,
     textAlign: 'center',
   },
   countdownPill: {
@@ -468,8 +487,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    alignSelf: 'stretch',
-    marginHorizontal: spacing.md,
+    alignSelf: 'center',
+    width: '80%',
     backgroundColor: colors.auth.inputBg,
     borderWidth: 0.5,
     borderColor: colors.sand,
@@ -579,7 +598,7 @@ const styles = StyleSheet.create({
   },
   selectionText: {
     fontFamily: fonts.barlowCondensedBold,
-    fontSize: 24,
+    fontSize: 26,
     color: colors.sand,
     textAlign: 'center',
     marginBottom: spacing.md,
@@ -664,20 +683,6 @@ const styles = StyleSheet.create({
     color: colors.auth.neon,
     letterSpacing: 1,
   },
-  successBox: {
-    backgroundColor: 'rgba(46, 204, 113, 0.15)',
-    padding: spacing.md,
-    borderRadius: borderRadius.medium,
-    marginBottom: spacing.md,
-    borderWidth: 0.5,
-    borderColor: colors.success,
-    alignItems: 'center',
-  },
-  successText: {
-    fontFamily: fonts.barlowCondensedBold,
-    fontSize: 14,
-    color: colors.success,
-  },
   budgetBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -687,12 +692,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.small,
     borderWidth: 0.5,
-    borderColor: colors.auth.neonSoft,
-    marginBottom: spacing.sm,
+    borderColor: colors.auth.statLabel,
   },
   budgetLabel: {
     fontFamily: fonts.barlowCondensedBold,
-    fontSize: 16,
+    fontSize: 18,
     color: colors.white,
     letterSpacing: 0.5,
   },
@@ -701,13 +705,16 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: colors.sand,
   },
+  cardInfoBlock: {
+    marginTop: spacing.md,
+    gap: 2,
+  },
   cardInfo: {
-    fontFamily: fonts.barlowCondensedRegular,
-    fontSize: 16,
+    fontFamily: fonts.barlowCondensedSemiBold,
+    fontSize: 18,
     color: colors.white,
     textAlign: 'center',
-    marginBottom: spacing.md,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   outlineButton: {
     flexDirection: 'row',
@@ -717,7 +724,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.round,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
   },
   outlineButtonIcon: {
     width: 20,

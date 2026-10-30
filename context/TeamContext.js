@@ -311,7 +311,7 @@ export const TeamProvider = ({ children }) => {
           if (!error) {
             setSquadFinalized(true);
             setLastTransferRoundId(currentRound.id);
-            setFreeTransfers(1);
+            setFreeTransfers(3);
             setUnlockedFreeTransfers(0);
             setTransfersMadeThisRound(0);
             setPendingDeductions(0);

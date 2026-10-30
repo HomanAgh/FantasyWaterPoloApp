@@ -3,7 +3,7 @@
   "displayName": "Fantasy Water Polo",
   "react-native-google-mobile-ads": {
     "android_app_id": "ca-app-pub-5616032972593206~1617481729",
-    "ios_app_id": "ca-app-pub-3940256099942544~1458002511"
+    "ios_app_id": "ca-app-pub-5616032972593206~8569361289"
   },
   "expo": {
     "name": "Fantasy Water Polo",
@@ -14,8 +14,9 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
+      "requireFullScreen": true,
       "bundleIdentifier": "com.fantasywaterpolo.app",
-      "buildNumber": "5",
+      "buildNumber": "7",
       "icon": "./assets/icon.png",
       "config": {
         "usesNonExemptEncryption": false
@@ -33,7 +34,23 @@
     "owner": "homanagh",
     "plugins": [
       "expo-font",
-      "expo-asset"
+      "expo-asset",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-5616032972593206~1617481729",
+          "iosAppId": "ca-app-pub-5616032972593206~8569361289",
+          "skAdNetworkItems": [
+            "cstr6suwn9.skadnetwork"
+          ]
+        }
+      ],
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "This identifier will be used to deliver personalized ads to you."
+        }
+      ]
     ]
   }
 }

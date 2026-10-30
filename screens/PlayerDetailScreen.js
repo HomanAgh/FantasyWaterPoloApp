@@ -9,12 +9,14 @@ import {
   Image,
 } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icons } from '../assets/images/icons';
 import { colors, borderRadius, spacing, fonts } from '../styles/theme';
 import { fetchPlayerDetail } from '../services/playerService';
 
 export default function PlayerDetailScreen({ route, navigation }) {
   const { playerId, player: playerPreview } = route.params;
+  const insets = useSafeAreaInsets();
 
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -62,7 +64,7 @@ export default function PlayerDetailScreen({ route, navigation }) {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={{ paddingBottom: spacing.xl + insets.bottom }}
       showsVerticalScrollIndicator={false}
     >
       {/* ── Header ── */}
@@ -208,28 +210,26 @@ export default function PlayerDetailScreen({ route, navigation }) {
                 const opp = formatMatchOpponent(match);
                 return (
                   <View key={i} style={styles.matchRow}>
-                    <View style={styles.matchLeft}>
-                      <Text style={styles.matchRound}>{opp.round}</Text>
-                      <Text style={styles.matchLabel} numberOfLines={1}>
-                        {opp.label}
-                      </Text>
+                    <View style={styles.matchTop}>
+                      <View style={styles.matchLeft}>
+                        <Text style={styles.matchRound}>{opp.round}</Text>
+                        <Text style={styles.matchLabel} numberOfLines={1}>
+                          {opp.label}
+                        </Text>
+                      </View>
+                      <View style={styles.matchPointsBadge}>
+                        <Text style={styles.matchPointsText}>{match.pointsEarned}</Text>
+                        <Text style={styles.matchPointsLabel}>PTS</Text>
+                      </View>
                     </View>
                     <View style={styles.matchStats}>
-                      {isGK ? (
-                        <>
-                          {match.saves > 0 && <MatchStat label="SVS" value={match.saves} />}
-                          {match.penaltySaves > 0 && <MatchStat label="PS" value={match.penaltySaves} />}
-                          {match.goals > 0 && <MatchStat label="GLS" value={match.goals} />}
-                        </>
-                      ) : (
-                        <>
-                          {match.goals > 0 && <MatchStat label="GLS" value={match.goals} />}
-                          {match.assists > 0 && <MatchStat label="ASS" value={match.assists} />}
-                        </>
-                      )}
-                      {match.blocks > 0 && !isGK && <MatchStat label="BLC" value={match.blocks} />}
-                      {match.sprints > 0 && !isGK && <MatchStat label="SPR" value={match.sprints} />}
-                      {match.steals > 0 && !isGK && <MatchStat label="STL" value={match.steals} />}
+                      {match.goals > 0 && <MatchStat label="GLS" value={match.goals} />}
+                      {match.assists > 0 && <MatchStat label="ASS" value={match.assists} />}
+                      {match.saves > 0 && <MatchStat label="SVS" value={match.saves} />}
+                      {match.penaltySaves > 0 && <MatchStat label="PS" value={match.penaltySaves} />}
+                      {match.blocks > 0 && <MatchStat label="BLC" value={match.blocks} />}
+                      {match.sprints > 0 && <MatchStat label="SPR" value={match.sprints} />}
+                      {match.steals > 0 && <MatchStat label="STL" value={match.steals} />}
                       {match.foulsDrawn > 0 && <MatchStat label="PFD" value={match.foulsDrawn} />}
                       {match.cleanSheets > 0 && (
                         <MatchStat label="CS" value={match.cleanSheets} />
@@ -237,10 +237,6 @@ export default function PlayerDetailScreen({ route, navigation }) {
                       {match.redCards > 0 && (
                         <Image source={Icons.redCard} style={styles.matchRedIcon} />
                       )}
-                    </View>
-                    <View style={styles.matchPointsBadge}>
-                      <Text style={styles.matchPointsText}>{match.pointsEarned}</Text>
-                      <Text style={styles.matchPointsLabel}>PTS</Text>
                     </View>
                   </View>
                 );
@@ -285,9 +281,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'transparent',
-  },
-  scrollContent: {
-    paddingBottom: spacing.xl,
   },
 
   header: {
@@ -451,7 +444,7 @@ const styles = StyleSheet.create({
     marginHorizontal: -spacing.md,
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     borderBottomWidth: 0.5,
     borderBottomColor: colors.auth.neon,
   },
@@ -543,11 +536,15 @@ const styles = StyleSheet.create({
   },
 
   matchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
     borderBottomWidth: 0.5,
     borderBottomColor: colors.auth.neonSoft,
+  },
+  matchTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
   },
   matchLeft: {
     flex: 1,
@@ -555,21 +552,21 @@ const styles = StyleSheet.create({
   },
   matchRound: {
     fontFamily: fonts.barlowCondensedBold,
-    fontSize: 12,
+    fontSize: 20,
     color: colors.auth.neon,
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   matchLabel: {
     fontFamily: fonts.barlowCondensedSemiBold,
-    fontSize: 14,
+    fontSize: 18,
     color: colors.white,
   },
   matchStats: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 4,
-    marginRight: spacing.sm,
   },
   matchStatPill: {
     backgroundColor: colors.auth.inputBg,
@@ -601,12 +598,12 @@ const styles = StyleSheet.create({
   },
   matchPointsText: {
     fontFamily: fonts.barlowCondensedExtraBold,
-    fontSize: 16,
+    fontSize: 18,
     color: colors.sand,
   },
   matchPointsLabel: {
     fontFamily: fonts.barlowCondensedMedium,
-    fontSize: 9,
+    fontSize: 10,
     color: colors.auth.statLabel,
     letterSpacing: 0.5,
   },

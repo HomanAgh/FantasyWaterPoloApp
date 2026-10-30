@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 /**
  * AdMob configuration.
  *
@@ -12,9 +14,15 @@
  * as a test device in AdMob.
  */
 
-/** Fantasy Water Polo — Rewarded (AdMob). Used only in release builds. */
+/** Fantasy Water Polo — Rewarded (AdMob, Android). Used only in release builds. */
+const ANDROID_REWARDED_AD_UNIT_ID = 'ca-app-pub-5616032972593206/9226456549';
+
+/** Fantasy Water Polo — Rewarded (AdMob, iOS). Used only in release builds. */
+const IOS_REWARDED_AD_UNIT_ID = 'ca-app-pub-5616032972593206/4438544588';
+
+/** Platform-specific production rewarded unit. Used only in release builds. */
 export const PRODUCTION_REWARDED_AD_UNIT_ID =
-  'ca-app-pub-5616032972593206/9226456549';
+  Platform.OS === 'ios' ? IOS_REWARDED_AD_UNIT_ID : ANDROID_REWARDED_AD_UNIT_ID;
 
 /** Kill switch — set false to disable all ad UI/loads without removing code. */
 export const ADS_ENABLED = true;
